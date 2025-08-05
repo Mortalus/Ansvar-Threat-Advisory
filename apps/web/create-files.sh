@@ -1,3 +1,13 @@
+#!/bin/bash
+
+# Create directories
+mkdir -p components/pipeline
+mkdir -p components/ui
+mkdir -p lib
+mkdir -p hooks
+
+# Create lib/store.ts
+cat > lib/store.ts << 'EOF'
 import { create } from 'zustand'
 
 export type PipelineStep = 
@@ -73,3 +83,6 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       uploadedFile: null,
     }),
 }))
+EOF
+
+echo "Created lib/store.ts"

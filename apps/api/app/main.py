@@ -1,7 +1,5 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import redis.asyncio as redis
 from app.config import get_settings
 from app.api.endpoints import pipeline, documents, websocket
 import logging
@@ -11,29 +9,19 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    app.state.redis = await redis.from_url(settings.redis_url)
-    logger.info("Connected to Redis")
-    yield
-    # Shutdown
-    await app.state.redis.close()
-    logger.info("Disconnected from Redis")
-
 app = FastAPI(
     title="Threat Modeling Pipeline API",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware - more permissive for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -41,6 +29,13 @@ app.include_router(pipeline.router, prefix="/api/pipeline", tags=["pipeline"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
+@app.get("/")
+async def root():
+    return {"message": "Threat Modeling Pipeline API"}
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Set Redis to None for now if not needed
+app.state.redis = None

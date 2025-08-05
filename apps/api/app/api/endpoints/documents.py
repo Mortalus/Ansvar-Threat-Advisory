@@ -13,10 +13,10 @@ async def upload_document(file: UploadFile = File(...)):
     
     # Validate file extension
     file_ext = file.filename.split(".")[-1].lower()
-    if file_ext not in settings.allowed_extensions:
+    if file_ext not in settings.allowed_extensions_list:  # Use the list property
         raise HTTPException(
             status_code=400,
-            detail=f"File type not allowed. Allowed types: {settings.allowed_extensions}"
+            detail=f"File type not allowed. Allowed types: {settings.allowed_extensions_list}"
         )
     
     # Validate file size
@@ -33,18 +33,24 @@ async def upload_document(file: UploadFile = File(...)):
         content = contents.decode("utf-8")
     elif file_ext == "pdf":
         # Use pypdf to extract text
-        import pypdf
-        import io
-        pdf_reader = pypdf.PdfReader(io.BytesIO(contents))
-        content = ""
-        for page in pdf_reader.pages:
-            content += page.extract_text()
+        try:
+            import pypdf
+            import io
+            pdf_reader = pypdf.PdfReader(io.BytesIO(contents))
+            content = ""
+            for page in pdf_reader.pages:
+                content += page.extract_text()
+        except:
+            content = "Error reading PDF file"
     elif file_ext == "docx":
         # Use python-docx to extract text
-        import docx
-        import io
-        doc = docx.Document(io.BytesIO(contents))
-        content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+        try:
+            import docx
+            import io
+            doc = docx.Document(io.BytesIO(contents))
+            content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+        except:
+            content = "Error reading DOCX file"
     else:
         content = contents.decode("utf-8", errors="ignore")
     
@@ -60,6 +66,6 @@ async def upload_document(file: UploadFile = File(...)):
 async def get_supported_formats():
     """Get list of supported document formats"""
     return {
-        "formats": settings.allowed_extensions,
+        "formats": settings.allowed_extensions_list,  # Use the list property
         "max_size_mb": settings.max_file_size_mb
     }

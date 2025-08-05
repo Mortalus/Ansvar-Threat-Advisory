@@ -1,54 +1,31 @@
-import axios from 'axios'
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-const client = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
 export const api = {
-  // Pipeline management
   createPipeline: async () => {
-    const response = await client.post('/api/pipeline/create')
-    return response.data
-  },
-
-  getPipelineStatus: async (pipelineId: string) => {
-    const response = await client.get(`/api/pipeline/${pipelineId}/status`)
-    return response.data
+    const response = await fetch(`${API_URL}/api/pipeline/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    return response.json()
   },
 
   executeStep: async (pipelineId: string, step: string, data?: any) => {
-    const response = await client.post(
-      `/api/pipeline/${pipelineId}/step/${step}`,
-      { input_data: data }
-    )
-    return response.data
+    const response = await fetch(`${API_URL}/api/pipeline/${pipelineId}/step/${step}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input_data: data }),
+    })
+    return response.json()
   },
 
-  validateStep: async (pipelineId: string, step: string) => {
-    const response = await client.post(`/api/pipeline/${pipelineId}/validate/${step}`)
-    return response.data
-  },
-
-  // Document management
   uploadDocument: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
     
-    const response = await client.post('/api/documents/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await fetch(`${API_URL}/api/documents/upload`, {
+      method: 'POST',
+      body: formData,
     })
-    return response.data
-  },
-
-  getSupportedFormats: async () => {
-    const response = await client.get('/api/documents/supported-formats')
-    return response.data
+    return response.json()
   },
 }

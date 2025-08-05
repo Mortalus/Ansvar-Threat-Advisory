@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from functools import lru_cache
 import os
 
@@ -9,12 +9,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     environment: str = "development"
     
-    # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # CORS - Changed to handle string that we'll split
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
     
     # File Upload
     max_file_size_mb: int = 10
-    allowed_extensions: list[str] = ["pdf", "docx", "txt"]
+    allowed_extensions: str = "pdf,docx,txt"  # Changed to string
     
     # Redis
     redis_url: str = "redis://localhost:6379"
@@ -38,9 +38,21 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # This allows extra fields in .env file
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Convert comma-separated string to list"""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
+    
+    @property
+    def allowed_extensions_list(self) -> List[str]:
+        """Convert comma-separated string to list"""
+        return [ext.strip() for ext in self.allowed_extensions.split(",")]
     
     def get_step_config(self, step_num: int) -> Dict[str, Any]:
         """Get configuration for a specific pipeline step"""
+        # Read directly from environment variables
         provider = os.getenv(f"STEP{step_num}_LLM_PROVIDER", "ollama")
         
         config = {

@@ -1,3 +1,27 @@
+cd /Users/jeffreyvonrotz/SynologyDrive/Projects/ThreatModelingPipeline/apps/web
+
+# Check if directories exist
+ls -la components/
+ls -la lib/
+
+# If not, create them
+mkdir -p components/pipeline
+mkdir -p components/ui
+mkdir -p lib
+mkdir -p hooks
+
+# Let's create a script to create all files at once
+cat > create-files.sh << 'SCRIPT'
+#!/bin/bash
+
+# Create directories
+mkdir -p components/pipeline
+mkdir -p components/ui
+mkdir -p lib
+mkdir -p hooks
+
+# Create lib/store.ts
+cat > lib/store.ts << 'EOF'
 import { create } from 'zustand'
 
 export type PipelineStep = 
@@ -73,3 +97,15 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       uploadedFile: null,
     }),
 }))
+EOF
+
+echo "Created lib/store.ts"
+SCRIPT
+
+# Make the script executable and run it
+chmod +x create-files.sh
+./create-files.sh
+
+# Now verify the files were created
+ls -la lib/
+ls -la components/
