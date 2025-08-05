@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threat Modeling Pipeline - Modern UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Modern purple/blue gradient colors */
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --secondary-gradient: linear-gradient(135deg, #5a67d8 0%, #7c3aed 100%);
+            --bg-dark: #0f0f23;
+            --bg-card: #1a1a2e;
+            --bg-hover: #252541;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0c0;
+            --border-color: #2a2a4a;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: var(--bg-dark);
+            overflow: hidden;
+        }
+
+        .background::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 80%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(118, 75, 162, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 40%, rgba(124, 58, 237, 0.05) 0%, transparent 50%);
+            animation: rotate 30s linear infinite;
+        }
+
+        @keyframes rotate {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Main layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+
+        /* Pipeline steps */
+        .pipeline-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--secondary-gradient);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .step:hover {
+            background: var(--bg-hover);
+        }
+
+        .step.active::before {
+            opacity: 0.1;
+        }
+
+        .step.active {
+            background: var(--bg-hover);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .step-number {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            background: var(--bg-hover);
+            position: relative;
+            z-index: 1;
+        }
+
+        .step.active .step-number {
+            background: var(--secondary-gradient);
+        }
+
+        .step.completed .step-number {
+            background: var(--success);
+        }
+
+        .step-info {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .step-status {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 10px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Content area */
+        .content-area {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 2rem;
+        }
+
+        .main-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(50%, -50%);
+        }
+
+        .upload-area {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .upload-area:hover {
+            border-color: rgba(124, 58, 237, 0.5);
+            background: rgba(124, 58, 237, 0.05);
+        }
+
+        .upload-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--secondary-gradient);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Side panel */
+        .side-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        /* Progress indicators */
+        .progress-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-hover);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .progress-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(124, 58, 237, 0.2);
+            color: #7c3aed;
+        }
+
+        .progress-icon.complete {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .progress-info {
+            flex: 1;
+        }
+
+        .progress-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .progress-value {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Status badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-badge.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--info);
+        }
+
+        .status-badge.complete {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Floating action button */
+        .fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .fab:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 40px rgba(124, 58, 237, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+    
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">🛡️</div>
+                <span>ThreatModel AI</span>
+            </div>
+            
+            <nav class="pipeline-steps">
+                <div class="step active">
+                    <div class="step-number">1</div>
+                    <div class="step-info">
+                        <div class="step-name">Document Upload</div>
+                        <div class="step-status">In Progress</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-info">
+                        <div class="step-name">DFD Extraction</div>
+                        <div class="step-status">Pending</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-info">
+                        <div class="step-name">Threat Generation</div>
+                        <div class="step-status">Pending</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-info">
+                        <div class="step-name">Threat Refinement</div>
+                        <div class="step-status">Pending</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div class="step-info">
+                        <div class="step-name">Attack Path Analysis</div>
+                        <div class="step-status">Pending</div>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+        
+        <!-- Main content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div>
+                    <h1 class="header-title">Security Requirements Analysis</h1>
+                    <p style="color: var(--text-secondary); margin-top: 0.25rem;">Upload your security documentation to begin threat modeling</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary">
+                        <span>⚙️</span>
+                        Settings
+                    </button>
+                    <button class="btn btn-primary">
+                        <span>▶️</span>
+                        Run Pipeline
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Content area -->
+            <div class="content-area">
+                <!-- Main panel -->
+                <div class="main-panel">
+                    <div class="upload-area">
+                        <div class="upload-icon">📄</div>
+                        <h2 style="margin-bottom: 0.5rem;">Drop files here or click to upload</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                            Supports PDF, DOCX, and TXT files up to 10MB
+                        </p>
+                        <button class="btn btn-primary">Choose Files</button>
+                    </div>
+                </div>
+                
+                <!-- Side panel -->
+                <div class="side-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">Pipeline Status</h3>
+                        <span class="status-badge active">
+                            <span class="status-dot"></span>
+                            Active
+                        </span>
+                    </div>
+                    
+                    <div class="progress-list">
+                        <div class="progress-item">
+                            <div class="progress-icon">📊</div>
+                            <div class="progress-info">
+                                <div class="progress-label">Components Identified</div>
+                                <div class="progress-value">0 entities, 0 processes</div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-item">
+                            <div class="progress-icon">🎯</div>
+                            <div class="progress-info">
+                                <div class="progress-label">Threats Generated</div>
+                                <div class="progress-value">0 threats across 0 categories</div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-item">
+                            <div class="progress-icon">🔍</div>
+                            <div class="progress-info">
+                                <div class="progress-label">Quality Score</div>
+                                <div class="progress-value">Not yet calculated</div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-item">
+                            <div class="progress-icon">🛤️</div>
+                            <div class="progress-info">
+                                <div class="progress-label">Attack Paths</div>
+                                <div class="progress-value">0 paths analyzed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Floating action button -->
+    <button class="fab">💬</button>
+</body>
+</html>
