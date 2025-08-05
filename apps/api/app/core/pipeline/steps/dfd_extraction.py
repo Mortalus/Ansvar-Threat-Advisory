@@ -1,45 +1,3 @@
-#!/bin/bash
-
-# Run this script from the apps/api directory
-
-# Create the steps directory if it doesn't exist
-mkdir -p app/core/pipeline/steps
-
-# Create the dependencies.py file
-cat > app/dependencies.py << 'EOF'
-# app/dependencies.py
-
-from typing import Generator
-from app.core.pipeline.manager import PipelineManager
-from app.config import get_settings
-
-# Global pipeline manager instance
-_pipeline_manager = None
-
-def get_pipeline_manager() -> PipelineManager:
-    """Get or create pipeline manager instance"""
-    global _pipeline_manager
-    if _pipeline_manager is None:
-        settings = get_settings()
-        _pipeline_manager = PipelineManager(settings)
-    return _pipeline_manager
-EOF
-
-# Create the __init__.py for steps
-cat > app/core/pipeline/steps/__init__.py << 'EOF'
-# app/core/pipeline/steps/__init__.py
-
-from .dfd_extraction import DFDExtractionStep, DFDComponents, DataFlow
-
-__all__ = [
-    'DFDExtractionStep',
-    'DFDComponents', 
-    'DataFlow'
-]
-EOF
-
-# Create the DFD extraction step
-cat > app/core/pipeline/steps/dfd_extraction.py << 'EOF'
 # app/core/pipeline/steps/dfd_extraction.py
 
 import json
@@ -249,14 +207,3 @@ Extract the DFD components and return them in the specified JSON format."""
                    f"{len(dfd.assets)} assets, "
                    f"{len(dfd.processes)} processes, "
                    f"{len(dfd.data_flows)} data flows")
-EOF
-
-echo "✅ Files created successfully!"
-echo ""
-echo "Directory structure created:"
-echo "  - app/dependencies.py"
-echo "  - app/core/pipeline/steps/__init__.py"
-echo "  - app/core/pipeline/steps/dfd_extraction.py"
-echo ""
-echo "Now you can try running the server again with:"
-echo "python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"

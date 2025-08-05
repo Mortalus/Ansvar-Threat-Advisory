@@ -1,23 +1,22 @@
-from typing import Dict, Any, Optional, List
-from enum import Enum
-import json
+# apps/api/app/core/pipeline/manager.py
+
+import asyncio
 import uuid
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
 import logging
+
+from app.config import Settings
 from app.core.llm.base import BaseLLMProvider
 from app.core.llm.ollama import OllamaProvider
 from app.core.llm.azure import AzureOpenAIProvider
 from app.core.llm.scaleway import ScalewayProvider
-from app.config import get_settings
+
+# Import pipeline steps
+from app.core.pipeline.steps.dfd_extraction import DFDExtractionStep
 
 logger = logging.getLogger(__name__)
-
-class PipelineStatus(str, Enum):
-    IDLE = "idle"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    PAUSED = "paused"
 
 class PipelineStep(str, Enum):
     DOCUMENT_UPLOAD = "document_upload"
@@ -26,32 +25,42 @@ class PipelineStep(str, Enum):
     THREAT_REFINEMENT = "threat_refinement"
     ATTACK_PATH_ANALYSIS = "attack_path_analysis"
 
+class PipelineStatus(str, Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
 class PipelineManager:
-    """Manages the threat modeling pipeline execution"""
-    
-    def __init__(self):
-        self.settings = get_settings()
+    def __init__(self, settings: Settings):
+        self.settings = settings
         self.pipelines: Dict[str, Dict[str, Any]] = {}
         
-    def create_pipeline(self, pipeline_id: Optional[str] = None) -> str:
+        # Initialize step handlers
+        self.dfd_extraction_step = None
+        
+    def create_pipeline(self, name: str) -> str:
         """Create a new pipeline instance"""
-        if not pipeline_id:
-            pipeline_id = str(uuid.uuid4())
-            
+        pipeline_id = str(uuid.uuid4())
+        
         self.pipelines[pipeline_id] = {
             "id": pipeline_id,
+            "name": name,
             "status": PipelineStatus.IDLE,
             "current_step": None,
-            "steps": {
-                PipelineStep.DOCUMENT_UPLOAD: {"status": "pending", "data": None},
-                PipelineStep.DFD_EXTRACTION: {"status": "pending", "data": None},
-                PipelineStep.THREAT_GENERATION: {"status": "pending", "data": None},
-                PipelineStep.THREAT_REFINEMENT: {"status": "pending", "data": None},
-                PipelineStep.ATTACK_PATH_ANALYSIS: {"status": "pending", "data": None},
-            },
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
-            "errors": []
+            "steps": {
+                step.value: {
+                    "status": "pending",
+                    "data": None,
+                    "error": None,
+                    "started_at": None,
+                    "completed_at": None
+                } for step in PipelineStep
+            },
+            "errors": [],
+            "results": {}
         }
         
         return pipeline_id
@@ -81,11 +90,11 @@ class PipelineManager:
         
         if current_index > 0:
             prev_step = step_order[current_index - 1]
-            if pipeline["steps"][prev_step]["status"] != "completed":
+            if pipeline["steps"][prev_step.value]["status"] != "completed":
                 return False
                 
             # Validate previous step output exists
-            if not pipeline["steps"][prev_step]["data"]:
+            if not pipeline["steps"][prev_step.value]["data"]:
                 return False
                 
         return True
@@ -98,8 +107,9 @@ class PipelineManager:
             
         # Update pipeline status
         pipeline["status"] = PipelineStatus.RUNNING
-        pipeline["current_step"] = step
-        pipeline["steps"][step]["status"] = "running"
+        pipeline["current_step"] = step.value
+        pipeline["steps"][step.value]["status"] = "running"
+        pipeline["steps"][step.value]["started_at"] = datetime.utcnow().isoformat()
         pipeline["updated_at"] = datetime.utcnow().isoformat()
         
         try:
@@ -109,20 +119,26 @@ class PipelineManager:
             # Execute based on step type
             if step == PipelineStep.DOCUMENT_UPLOAD:
                 result = await self._handle_document_upload(input_data)
+                
             elif step == PipelineStep.DFD_EXTRACTION:
                 result = await self._extract_dfd(pipeline_id, step_num)
+                
             elif step == PipelineStep.THREAT_GENERATION:
                 result = await self._generate_threats(pipeline_id, step_num)
+                
             elif step == PipelineStep.THREAT_REFINEMENT:
                 result = await self._refine_threats(pipeline_id, step_num)
+                
             elif step == PipelineStep.ATTACK_PATH_ANALYSIS:
                 result = await self._analyze_attack_paths(pipeline_id, step_num)
+                
             else:
                 raise ValueError(f"Unknown step: {step}")
                 
             # Update pipeline with results
-            pipeline["steps"][step]["status"] = "completed"
-            pipeline["steps"][step]["data"] = result
+            pipeline["steps"][step.value]["status"] = "completed"
+            pipeline["steps"][step.value]["data"] = result
+            pipeline["steps"][step.value]["completed_at"] = datetime.utcnow().isoformat()
             pipeline["updated_at"] = datetime.utcnow().isoformat()
             
             # Check if all steps are complete
@@ -139,179 +155,154 @@ class PipelineManager:
             
         except Exception as e:
             logger.error(f"Step {step} failed: {e}")
-            pipeline["steps"][step]["status"] = "failed"
+            pipeline["steps"][step.value]["status"] = "failed"
+            pipeline["steps"][step.value]["error"] = str(e)
             pipeline["status"] = PipelineStatus.FAILED
             pipeline["errors"].append({
-                "step": step,
+                "step": step.value,
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             })
             raise
     
-    async def _handle_document_upload(self, document_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_document_upload(self, input_data: Any) -> Dict[str, Any]:
         """Handle document upload step"""
+        # This would typically process the uploaded file
+        # For now, we'll just store the file information
         return {
-            "filename": document_data.get("filename"),
-            "content": document_data.get("content"),
-            "size": len(document_data.get("content", "")),
-            "processed_at": datetime.utcnow().isoformat()
+            "status": "completed",
+            "filename": input_data.get("filename", "document.txt"),
+            "content": input_data.get("content", ""),
+            "size": len(input_data.get("content", "")),
+            "type": input_data.get("type", "text/plain"),
+            "timestamp": datetime.utcnow().isoformat()
         }
     
     async def _extract_dfd(self, pipeline_id: str, step_num: int) -> Dict[str, Any]:
-        """Extract DFD from document"""
+        """Extract DFD from uploaded documents"""
+        logger.info(f"Starting DFD extraction for pipeline {pipeline_id}")
+        
+        # Get LLM provider for this step
+        llm_provider = self.get_llm_provider(step_num)
+        
+        # Initialize DFD extraction step if not already done
+        if not self.dfd_extraction_step:
+            self.dfd_extraction_step = DFDExtractionStep(llm_provider)
+        else:
+            # Update LLM provider
+            self.dfd_extraction_step.llm_provider = llm_provider
+        
+        # Get pipeline data
         pipeline = self.pipelines[pipeline_id]
-        document_data = pipeline["steps"][PipelineStep.DOCUMENT_UPLOAD]["data"]
         
-        llm = self.get_llm_provider(step_num)
+        # Prepare input data from previous steps
+        pipeline_data = {
+            "document_upload": pipeline["steps"]["document_upload"]
+        }
         
-        prompt = f"""
-        Extract Data Flow Diagram components from the following document:
+        # Execute DFD extraction
+        result = await self.dfd_extraction_step.execute(pipeline_data)
         
-        {document_data['content']}
-        
-        Return a JSON with:
-        - entities: list of external entities
-        - processes: list of processes
-        - data_stores: list of data stores
-        - data_flows: list of data flows between components
-        """
-        
-        response = await llm.generate(prompt)
-        
-        try:
-            return json.loads(response.content)
-        except:
-            # Fallback to basic structure
-            return {
-                "entities": ["User", "Admin"],
-                "processes": ["Authentication", "Data Processing"],
-                "data_stores": ["Database", "Cache"],
-                "data_flows": [
-                    {"from": "User", "to": "Authentication", "data": "Credentials"},
-                    {"from": "Authentication", "to": "Database", "data": "User Query"}
-                ]
-            }
+        logger.info(f"DFD extraction completed for pipeline {pipeline_id}")
+        return result
     
     async def _generate_threats(self, pipeline_id: str, step_num: int) -> Dict[str, Any]:
-        """Generate threats based on DFD"""
+        """Generate threats using STRIDE methodology"""
+        # TODO: Implement threat generation
+        logger.info(f"Generating threats for pipeline {pipeline_id}")
+        
         pipeline = self.pipelines[pipeline_id]
-        dfd_data = pipeline["steps"][PipelineStep.DFD_EXTRACTION]["data"]
+        dfd_data = pipeline["steps"]["dfd_extraction"]["data"]
         
-        llm = self.get_llm_provider(step_num)
-        
-        prompt = f"""
-        Generate security threats for the following system components using STRIDE methodology:
-        
-        {json.dumps(dfd_data, indent=2)}
-        
-        Return a JSON with threats categorized by STRIDE:
-        - Spoofing
-        - Tampering
-        - Repudiation
-        - Information Disclosure
-        - Denial of Service
-        - Elevation of Privilege
-        
-        Each threat should have: title, description, affected_component, severity (low/medium/high/critical)
-        """
-        
-        response = await llm.generate(prompt)
-        
-        try:
-            return json.loads(response.content)
-        except:
-            # Fallback threats
-            return {
-                "spoofing": [
-                    {
-                        "title": "User Impersonation",
-                        "description": "Attacker could impersonate legitimate user",
-                        "affected_component": "Authentication",
-                        "severity": "high"
-                    }
-                ],
-                "tampering": [
-                    {
-                        "title": "Data Modification",
-                        "description": "Unauthorized modification of user data",
-                        "affected_component": "Database",
-                        "severity": "critical"
-                    }
-                ]
-            }
+        # For now, return mock data
+        return {
+            "status": "completed",
+            "threats": [
+                {
+                    "id": "T001",
+                    "category": "Spoofing",
+                    "component": "User Authentication",
+                    "description": "Attacker could spoof user identity",
+                    "risk_level": "High"
+                },
+                {
+                    "id": "T002",
+                    "category": "Tampering",
+                    "component": "Data Flow",
+                    "description": "Data could be modified in transit",
+                    "risk_level": "Medium"
+                }
+            ],
+            "total_threats": 2,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     
     async def _refine_threats(self, pipeline_id: str, step_num: int) -> Dict[str, Any]:
-        """Refine and validate generated threats"""
+        """Refine and enhance generated threats"""
+        # TODO: Implement threat refinement
+        logger.info(f"Refining threats for pipeline {pipeline_id}")
+        
         pipeline = self.pipelines[pipeline_id]
-        threats_data = pipeline["steps"][PipelineStep.THREAT_GENERATION]["data"]
+        threats_data = pipeline["steps"]["threat_generation"]["data"]
         
-        llm = self.get_llm_provider(step_num)
-        
-        prompt = f"""
-        Review and refine the following threats for quality and completeness:
-        
-        {json.dumps(threats_data, indent=2)}
-        
-        For each threat:
-        1. Ensure clear, actionable description
-        2. Add mitigation strategies
-        3. Assign realistic risk scores
-        4. Remove duplicates
-        5. Add missing critical threats
-        
-        Return refined JSON with same structure plus mitigations field for each threat.
-        """
-        
-        response = await llm.generate(prompt)
-        
-        try:
-            refined = json.loads(response.content)
-            refined["quality_score"] = 85  # Add quality score
-            return refined
-        except:
-            # Return original with quality score
-            threats_data["quality_score"] = 70
-            return threats_data
+        # For now, return enhanced mock data
+        return {
+            "status": "completed",
+            "refined_threats": threats_data.get("threats", []),
+            "enhancements": ["Added CVSS scores", "Linked to CWE database"],
+            "timestamp": datetime.utcnow().isoformat()
+        }
     
     async def _analyze_attack_paths(self, pipeline_id: str, step_num: int) -> Dict[str, Any]:
         """Analyze potential attack paths"""
+        # TODO: Implement attack path analysis
+        logger.info(f"Analyzing attack paths for pipeline {pipeline_id}")
+        
         pipeline = self.pipelines[pipeline_id]
-        refined_threats = pipeline["steps"][PipelineStep.THREAT_REFINEMENT]["data"]
+        threats_data = pipeline["steps"]["threat_refinement"]["data"]
         
-        llm = self.get_llm_provider(step_num)
-        
-        prompt = f"""
-        Analyze attack paths for the following threats:
-        
-        {json.dumps(refined_threats, indent=2)}
-        
-        Generate attack chains showing how threats could be combined.
-        
-        Return JSON with:
-        - attack_paths: list of attack sequences
-        - critical_paths: most dangerous combinations
-        - recommended_priorities: which to address first
-        """
-        
-        response = await llm.generate(prompt)
-        
-        try:
-            return json.loads(response.content)
-        except:
-            # Fallback attack paths
-            return {
-                "attack_paths": [
-                    {
-                        "name": "Data Breach Path",
-                        "steps": ["User Impersonation", "Privilege Escalation", "Data Exfiltration"],
-                        "likelihood": "medium",
-                        "impact": "critical"
-                    }
-                ],
-                "critical_paths": ["Data Breach Path"],
-                "recommended_priorities": ["Authentication hardening", "Access control review"]
-            }
+        # For now, return mock attack paths
+        return {
+            "status": "completed",
+            "attack_paths": [
+                {
+                    "id": "AP001",
+                    "name": "External to Database",
+                    "steps": ["Internet", "CDN", "Load Balancer", "Web Server", "Database"],
+                    "risk_score": 8.5,
+                    "exploited_threats": ["T001", "T002"]
+                }
+            ],
+            "total_paths": 1,
+            "critical_paths": 1,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     
     def get_pipeline_status(self, pipeline_id: str) -> Optional[Dict[str, Any]]:
-        """Get current pipeline status"""
+        """Get the current status of a pipeline"""
         return self.pipelines.get(pipeline_id)
+    
+    def list_pipelines(self) -> List[Dict[str, Any]]:
+        """List all pipelines"""
+        return list(self.pipelines.values())
+    
+    async def run_full_pipeline(self, pipeline_id: str, document_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the complete pipeline from start to finish"""
+        results = {}
+        
+        # Execute each step in order
+        for step in PipelineStep:
+            if step == PipelineStep.DOCUMENT_UPLOAD:
+                result = await self.execute_step(pipeline_id, step, document_data)
+            else:
+                # Validate input is ready
+                if not await self.validate_step_input(pipeline_id, step):
+                    raise ValueError(f"Input not ready for step {step}")
+                result = await self.execute_step(pipeline_id, step)
+            
+            results[step.value] = result
+            
+            # Add small delay between steps (optional)
+            await asyncio.sleep(0.5)
+        
+        return results

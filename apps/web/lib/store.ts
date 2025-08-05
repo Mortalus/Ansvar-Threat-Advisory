@@ -1,3 +1,4 @@
+// apps/web/lib/store.ts
 import { create } from 'zustand'
 
 export type PipelineStep = 
@@ -8,68 +9,103 @@ export type PipelineStep =
   | 'attack_path_analysis'
 
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed'
-export type PipelineStatus = 'idle' | 'running' | 'completed' | 'failed' | 'paused'
 
 interface StepData {
   status: StepStatus
   data: any
+  error?: string
 }
 
 interface PipelineStore {
-  pipelineId: string | null
+  // Current state
   currentStep: PipelineStep
-  status: PipelineStatus
-  steps: Record<PipelineStep, StepData>
+  pipelineId: string | null
   uploadedFile: File | null
   
-  setPipelineId: (id: string) => void
+  // Step statuses
+  steps: Record<PipelineStep, StepData>
+  
+  // Actions
   setCurrentStep: (step: PipelineStep) => void
-  setStatus: (status: PipelineStatus) => void
+  setPipelineId: (id: string) => void
+  setUploadedFile: (file: File | null) => void
   setStepStatus: (step: PipelineStep, status: StepStatus) => void
   setStepData: (step: PipelineStep, data: any) => void
-  setUploadedFile: (file: File | null) => void
-  reset: () => void
+  setStepError: (step: PipelineStep, error: string) => void
+  resetPipeline: () => void
 }
 
-const initialSteps: Record<PipelineStep, StepData> = {
-  document_upload: { status: 'pending', data: null },
-  dfd_extraction: { status: 'pending', data: null },
-  threat_generation: { status: 'pending', data: null },
-  threat_refinement: { status: 'pending', data: null },
-  attack_path_analysis: { status: 'pending', data: null },
+const initialStepData: StepData = {
+  status: 'pending',
+  data: null
 }
 
 export const usePipelineStore = create<PipelineStore>((set) => ({
-  pipelineId: null,
+  // Initial state
   currentStep: 'document_upload',
-  status: 'idle',
-  steps: initialSteps,
+  pipelineId: null,
   uploadedFile: null,
   
-  setPipelineId: (id) => set({ pipelineId: id }),
+  steps: {
+    document_upload: { ...initialStepData },
+    dfd_extraction: { ...initialStepData },
+    threat_generation: { ...initialStepData },
+    threat_refinement: { ...initialStepData },
+    attack_path_analysis: { ...initialStepData },
+  },
+  
+  // Actions
   setCurrentStep: (step) => set({ currentStep: step }),
-  setStatus: (status) => set({ status }),
+  
+  setPipelineId: (id) => set({ pipelineId: id }),
+  
+  setUploadedFile: (file) => set({ uploadedFile: file }),
+  
   setStepStatus: (step, status) =>
     set((state) => ({
       steps: {
         ...state.steps,
-        [step]: { ...state.steps[step], status },
+        [step]: {
+          ...state.steps[step],
+          status,
+        },
       },
     })),
+  
   setStepData: (step, data) =>
     set((state) => ({
       steps: {
         ...state.steps,
-        [step]: { ...state.steps[step], data },
+        [step]: {
+          ...state.steps[step],
+          data,
+        },
       },
     })),
-  setUploadedFile: (file) => set({ uploadedFile: file }),
-  reset: () =>
+  
+  setStepError: (step, error) =>
+    set((state) => ({
+      steps: {
+        ...state.steps,
+        [step]: {
+          ...state.steps[step],
+          error,
+          status: 'failed',
+        },
+      },
+    })),
+  
+  resetPipeline: () =>
     set({
-      pipelineId: null,
       currentStep: 'document_upload',
-      status: 'idle',
-      steps: initialSteps,
+      pipelineId: null,
       uploadedFile: null,
+      steps: {
+        document_upload: { ...initialStepData },
+        dfd_extraction: { ...initialStepData },
+        threat_generation: { ...initialStepData },
+        threat_refinement: { ...initialStepData },
+        attack_path_analysis: { ...initialStepData },
+      },
     }),
 }))
