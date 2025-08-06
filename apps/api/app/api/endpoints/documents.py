@@ -270,6 +270,11 @@ class GenerateThreatsRequest(BaseModel):
 class RefineThreatRequest(BaseModel):
     pipeline_id: str
 
+class AttackPathAnalysisRequest(BaseModel):
+    pipeline_id: str
+    max_path_length: int = 5
+    max_paths_to_analyze: int = 20
+
 @router.post("/review-dfd", response_model=dict)
 async def review_dfd_components(
     request: ReviewDFDRequest,
@@ -406,6 +411,60 @@ async def refine_threats(
         raise HTTPException(
             status_code=500,
             detail=f"Threat refinement failed: {str(e)}"
+        )
+
+@router.post("/analyze-attack-paths", response_model=dict)
+async def analyze_attack_paths(
+    request: AttackPathAnalysisRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """
+    Analyze attack paths based on refined threats and DFD components.
+    Identifies potential attack chains and provides defensive recommendations.
+    """
+    try:
+        pipeline_id = request.pipeline_id
+        
+        # Verify that threat refinement is complete
+        pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail=f"Pipeline {pipeline_id} not found")
+        
+        threat_refine_step = pipeline["steps"].get("threat_refinement", {})
+        if threat_refine_step.get("status") != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Threat refinement must be completed before attack path analysis"
+            )
+        
+        # Execute attack path analysis step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.ATTACK_PATH_ANALYSIS,
+            data={
+                "max_path_length": request.max_path_length,
+                "max_paths_to_analyze": request.max_paths_to_analyze
+            }
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "attack_paths": result["attack_paths"],
+            "critical_scenarios": result["critical_scenarios"],
+            "defense_priorities": result["defense_priorities"],
+            "threat_coverage": result["threat_coverage"],
+            "metadata": result["metadata"],
+            "analyzed_at": result.get("analyzed_at"),
+            "status": "analyzed"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Attack path analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Attack path analysis failed: {str(e)}"
         )
 
 @router.get("/sample", response_model=DFDComponents)

@@ -611,23 +611,75 @@ class PipelineManager:
         service: PipelineService
     ) -> Dict[str, Any]:
         """Handle attack path analysis step"""
-        # TODO: Implement attack path analysis logic
-        result = {
-            "attack_paths": [],
-            "status": "pending_implementation",
-            "analyzed_at": datetime.utcnow().isoformat()
-        }
+        # Get pipeline to check previous steps are complete
+        pipeline = await service.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise ValueError(f"Pipeline {pipeline_id} not found")
         
-        # Store attack paths in pipeline database (when implemented)
+        # Verify threat refinement is complete and get refined threats
+        threat_refine_step = next((step for step in pipeline.steps 
+                                 if step.step_name == "threat_refinement"), None)
+        if not threat_refine_step or threat_refine_step.status != StepStatus.COMPLETED:
+            raise ValueError("Threat refinement must be completed before attack path analysis")
+        
+        # Get refined threats from step results
+        threat_result = next((result for result in threat_refine_step.results 
+                            if result.result_type == "refined_threats"), None)
+        if not threat_result:
+            raise ValueError("No refined threats found from threat refinement step")
+        
+        refined_threats = threat_result.result_data.get("refined_threats", [])
+        if not refined_threats:
+            raise ValueError("No refined threats data available for analysis")
+        
+        # Get DFD components from pipeline
+        dfd_components = pipeline.dfd_components
+        if not dfd_components:
+            raise ValueError("DFD components not found. Run DFD extraction first.")
+        
+        logger.info(f"Starting attack path analysis for pipeline {pipeline_id}")
+        logger.info(f"Analyzing {len(refined_threats)} refined threats")
+        
+        # Import and use the attack path analyzer
+        from app.core.pipeline.steps.attack_path_analyzer import AttackPathAnalyzer
+        
+        # Configure analyzer based on data parameters
+        max_path_length = data.get("max_path_length", 5)
+        max_paths_to_analyze = data.get("max_paths_to_analyze", 20)
+        
+        analyzer = AttackPathAnalyzer(
+            max_path_length=max_path_length,
+            max_paths_to_analyze=max_paths_to_analyze
+        )
+        
+        # Get the session from service
+        session = service.session if hasattr(service, 'session') else await self._get_session()
+        
+        # Execute attack path analysis
+        result = await analyzer.execute(
+            db_session=session,
+            pipeline_step_result=None,
+            refined_threats=refined_threats,
+            dfd_components=dfd_components
+        )
+        
+        # Store attack paths in pipeline database
         await service.update_pipeline_data(
             pipeline_id,
-            attack_paths=result["attack_paths"]
+            attack_paths=result.get("attack_paths", [])
         )
+        
+        # Add timestamp
+        result["analyzed_at"] = datetime.utcnow().isoformat()
         
         # Store step result
         await service.add_step_result(
             pipeline_id, "attack_path_analysis", "attack_paths", result
         )
+        
+        logger.info(f"Attack path analysis complete for pipeline {pipeline_id}")
+        logger.info(f"Found {len(result.get('attack_paths', []))} attack paths, "
+                   f"{len(result.get('critical_scenarios', []))} critical scenarios")
         
         return result
     
