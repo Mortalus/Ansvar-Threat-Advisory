@@ -18,12 +18,14 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3001"
     cors_origins: str = "*"  # Allow all origins for Docker deployment
     
-    # Redis (optional)
-    redis_url: Optional[str] = None
+    # Redis (for caching and Celery)
+    redis_url: str = "redis://localhost:6379/0"
     redis_ttl: int = 3600
     
-    # Database (future)
+    # Database 
     database_url: Optional[str] = None
+    database_max_connections: int = 20
+    database_ssl_require: bool = False
     
     # File Upload
     max_file_size_mb: int = 10

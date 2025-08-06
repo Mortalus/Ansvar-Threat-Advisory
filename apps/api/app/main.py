@@ -9,7 +9,7 @@ from datetime import datetime
 from app.config import settings, get_cors_origins
 
 # Import routers
-from app.api.endpoints import documents, pipeline, websocket, llm
+from app.api.endpoints import documents, pipeline, websocket, llm, tasks
 
 # Configure logging
 logging.basicConfig(
@@ -53,6 +53,7 @@ app.add_middleware(
 app.include_router(documents.router, prefix="/api")
 app.include_router(pipeline.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")
+app.include_router(tasks.router, prefix="/api")
 app.include_router(websocket.router)
 
 # Health check endpoint

@@ -16,6 +16,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 class ExtractDFDRequest(BaseModel):
     pipeline_id: str
+    background: bool = False  # New flag to enable background processing
 
 async def extract_text_from_file(file: UploadFile) -> str:
     """Extract text content from uploaded file"""
@@ -152,8 +153,29 @@ async def extract_dfd_from_documents(
 ):
     """
     Manually trigger DFD extraction for an uploaded document pipeline.
+    
+    If background=True, queues the extraction as a background task and returns immediately.
+    If background=False, executes synchronously and returns results.
     """
     try:
+        if request.background:
+            # Background execution path
+            from app.tasks.pipeline_tasks import execute_pipeline_step
+            
+            task = execute_pipeline_step.delay(
+                pipeline_id=request.pipeline_id,
+                step="dfd_extraction",
+                data={}
+            )
+            
+            return {
+                "pipeline_id": request.pipeline_id,
+                "task_id": task.id,
+                "status": "queued",
+                "message": "DFD extraction queued for background processing"
+            }
+        
+        # Synchronous execution path (existing logic)
         # Extract pipeline_id from request body
         pipeline_id = request.pipeline_id
         logger.info(f"Attempting to extract DFD for pipeline: {pipeline_id}")
@@ -177,22 +199,26 @@ async def extract_dfd_from_documents(
             )
         
         # Get the document text from the pipeline
-        document_text = pipeline.get("document_text")
-        if not document_text:
-            # Fallback to results if not in main pipeline data
-            document_text = pipeline["results"].get("document_upload", {}).get("document_text")
+        # Document text is now stored in the database and will be retrieved by the manager
+        # We just need to pass the pipeline_id, the manager will get the text from DB
+        document_text = None
         
-        if not document_text:
-            raise HTTPException(
-                status_code=400,
-                detail="No document text found in pipeline"
-            )
+        # Try to get document text from step results if available
+        upload_step = pipeline["steps"].get("document_upload", {})
+        if upload_step.get("result"):
+            document_text = upload_step["result"].get("document_text")
+        
+        # The PipelineManager will handle getting document text from database if not provided
         
         # Execute DFD extraction step
+        data = {}
+        if document_text:
+            data["document_text"] = document_text
+        
         result = await pipeline_manager.execute_step(
             pipeline_id=pipeline_id,
             step=PipelineStep.DFD_EXTRACTION,
-            data={"document_text": document_text}
+            data=data
         )
         
         return {
