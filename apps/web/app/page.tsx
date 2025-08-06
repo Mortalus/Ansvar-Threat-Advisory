@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { api } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle } from 'lucide-react'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight } from 'lucide-react'
+import { DFDReviewStep } from '@/components/pipeline/steps/dfd-review'
 
 export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
@@ -117,12 +118,6 @@ export default function HomePage() {
         setPipelineId(response.pipeline_id)
       }
 
-      if (response.dfd_components) {
-        setDfdComponents(response.dfd_components)
-        setStepStatus('dfd_extraction', 'complete')
-        setStepResult('dfd_extraction', response.dfd_components)
-      }
-
       if (response.text_length) {
         setDocumentText(`Extracted ${response.text_length} characters`)
       }
@@ -131,12 +126,7 @@ export default function HomePage() {
       setStepStatus('document_upload', 'complete')
       setStepResult('document_upload', { files: response.files })
 
-      // Auto-advance to next step if DFD extraction completed
-      if (response.dfd_components) {
-        setCurrentStep('threat_generation')
-      } else {
-        setCurrentStep('dfd_extraction')
-      }
+      // Stay on document upload step to show completion
 
     } catch (error) {
       console.error('Upload failed:', error)
@@ -155,6 +145,33 @@ export default function HomePage() {
     setStepStatus('document_upload', 'pending')
     setUploadError(null)
   }, [])
+
+  const handleExtractDFD = async () => {
+    if (!useStore.getState().currentPipelineId) {
+      console.error('No pipeline ID available')
+      return
+    }
+
+    setLoading(true)
+    setStepStatus('dfd_extraction', 'in_progress')
+
+    try {
+      const result = await api.extractDFDComponents(useStore.getState().currentPipelineId!)
+      
+      // Update state with extracted DFD
+      setDfdComponents(result.dfd_components)
+      setDfdValidation(result.validation)
+      setStepStatus('dfd_extraction', 'complete')
+      setStepResult('dfd_extraction', result)
+      
+    } catch (error) {
+      console.error('DFD extraction failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'DFD extraction failed'
+      setStepStatus('dfd_extraction', 'error', errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -236,9 +253,25 @@ export default function HomePage() {
                 </div>
 
                 {stepStates.document_upload.status === 'complete' && (
-                  <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                    <p className="text-green-400">Documents uploaded successfully!</p>
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <p className="text-green-400">Documents uploaded successfully!</p>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                      <div>
+                        <p className="text-white font-medium">Ready for DFD Extraction</p>
+                        <p className="text-gray-400 text-sm">Extract system components from your documents</p>
+                      </div>
+                      <button
+                        onClick={() => setCurrentStep('dfd_extraction')}
+                        className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        Next Step
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -263,7 +296,47 @@ export default function HomePage() {
               </p>
             </div>
 
-            {stepStates.dfd_extraction.status === 'in_progress' && (
+            {stepStates.document_upload.status !== 'complete' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2">Documents Required</p>
+                  <p className="text-gray-400 mb-4">
+                    Please upload documents first before proceeding with DFD extraction.
+                  </p>
+                  <button
+                    onClick={() => setCurrentStep('document_upload')}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all"
+                  >
+                    Go to Document Upload
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stepStates.document_upload.status === 'complete' && stepStates.dfd_extraction.status === 'pending' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-blue-500/10 border border-blue-500/30 rounded-xl max-w-md">
+                  <div className="w-16 h-16 rounded-full gradient-purple-blue flex items-center justify-center mx-auto mb-4">
+                    <Play className="w-8 h-8 text-white" />
+                  </div>
+                  <p className="text-lg font-semibold mb-2">Ready to Extract DFD</p>
+                  <p className="text-gray-400 mb-6">
+                    Click the button below to analyze your documents and extract system components.
+                  </p>
+                  <button
+                    onClick={handleExtractDFD}
+                    disabled={isLoading}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    {isLoading ? 'Extracting...' : 'Start DFD Extraction'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stepStates.document_upload.status === 'complete' && stepStates.dfd_extraction.status === 'in_progress' && (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -273,7 +346,23 @@ export default function HomePage() {
               </div>
             )}
 
-            {dfdComponents && (
+            {stepStates.dfd_extraction.status === 'complete' && (
+              <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <p className="text-green-400">DFD extraction completed successfully!</p>
+                </div>
+                <button
+                  onClick={() => setCurrentStep('dfd_review')}
+                  className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Review DFD
+                </button>
+              </div>
+            )}
+
+            {dfdComponents && dfdComponents.external_entities && (
               <div className="flex-1 overflow-auto">
                 <div className="space-y-6">
                   <div className="card-bg rounded-xl p-6">
@@ -281,15 +370,15 @@ export default function HomePage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-400">Name:</span>
-                        <span>{dfdComponents.project_name}</span>
+                        <span>{dfdComponents.project_name || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400">Version:</span>
-                        <span>{dfdComponents.project_version}</span>
+                        <span>{dfdComponents.project_version || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400">Industry:</span>
-                        <span>{dfdComponents.industry_context}</span>
+                        <span>{dfdComponents.industry_context || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -298,7 +387,7 @@ export default function HomePage() {
                     <div className="card-bg rounded-xl p-6">
                       <h3 className="text-lg font-semibold mb-3">External Entities</h3>
                       <div className="space-y-2">
-                        {dfdComponents.external_entities.map((entity, i) => (
+                        {(dfdComponents.external_entities || []).map((entity, i) => (
                           <div key={i} className="text-sm text-gray-300">{entity}</div>
                         ))}
                       </div>
@@ -307,7 +396,7 @@ export default function HomePage() {
                     <div className="card-bg rounded-xl p-6">
                       <h3 className="text-lg font-semibold mb-3">Processes</h3>
                       <div className="space-y-2">
-                        {dfdComponents.processes.map((process, i) => (
+                        {(dfdComponents.processes || []).map((process, i) => (
                           <div key={i} className="text-sm text-gray-300">{process}</div>
                         ))}
                       </div>
@@ -317,7 +406,7 @@ export default function HomePage() {
                   <div className="card-bg rounded-xl p-6">
                     <h3 className="text-lg font-semibold mb-3">Data Flows</h3>
                     <div className="space-y-3">
-                      {dfdComponents.data_flows.slice(0, 5).map((flow, i) => (
+                      {(dfdComponents.data_flows || []).slice(0, 5).map((flow, i) => (
                         <div key={i} className="p-3 bg-[#1a1a2e] rounded-lg">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-sm font-medium">{flow.source}</span>
@@ -332,9 +421,9 @@ export default function HomePage() {
                           </div>
                         </div>
                       ))}
-                      {dfdComponents.data_flows.length > 5 && (
+                      {(dfdComponents.data_flows || []).length > 5 && (
                         <p className="text-sm text-gray-400 text-center">
-                          +{dfdComponents.data_flows.length - 5} more flows
+                          +{(dfdComponents.data_flows || []).length - 5} more flows
                         </p>
                       )}
                     </div>
@@ -344,6 +433,9 @@ export default function HomePage() {
             )}
           </div>
         )
+
+      case 'dfd_review':
+        return <DFDReviewStep />
 
       case 'threat_generation':
         return (
@@ -406,6 +498,7 @@ export default function HomePage() {
             {[
               { id: 'document_upload', name: 'Document Upload' },
               { id: 'dfd_extraction', name: 'DFD Extraction' },
+              { id: 'dfd_review', name: 'DFD Review' },
               { id: 'threat_generation', name: 'Threat Generation' },
               { id: 'threat_refinement', name: 'Threat Refinement' },
               { id: 'attack_path_analysis', name: 'Attack Path Analysis' },
@@ -416,14 +509,22 @@ export default function HomePage() {
               const isError = status === 'error'
               const isInProgress = status === 'in_progress'
               
+              // Check if step is accessible based on previous steps
+              const steps = ['document_upload', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis']
+              const stepIndex = steps.indexOf(step.id)
+              const canAccess = stepIndex === 0 || steps.slice(0, stepIndex).every(prevStep => 
+                stepStates[prevStep as keyof typeof stepStates]?.status === 'complete'
+              )
+              
               return (
                 <button
                   key={step.id}
-                  onClick={() => setCurrentStep(step.id as any)}
+                  onClick={() => canAccess ? setCurrentStep(step.id as any) : null}
+                  disabled={!canAccess}
                   className={`
                     w-full text-left p-4 rounded-xl transition-all
                     ${isActive ? 'bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/50' : 
-                      'hover:bg-[#252541]'}
+                      canAccess ? 'hover:bg-[#252541]' : 'opacity-50 cursor-not-allowed'}
                   `}
                 >
                   <div className="flex items-center gap-3">
@@ -438,9 +539,14 @@ export default function HomePage() {
                       {isComplete ? '✓' : 
                        isError ? '!' :
                        isInProgress ? '...' :
-                       ['1', '2', '3', '4', '5'][['document_upload', 'dfd_extraction', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
+                       ['1', '2', '3', '4', '5', '6'][['document_upload', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
                     </div>
-                    <span className={isActive ? 'font-semibold' : ''}>{step.name}</span>
+                    <div className="flex-1">
+                      <span className={isActive ? 'font-semibold' : ''}>{step.name}</span>
+                    </div>
+                    {isComplete && (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    )}
                   </div>
                 </button>
               )

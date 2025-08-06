@@ -1,5 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Log API URL for debugging
+console.log('API_URL configured as:', API_URL)
+
 export interface DFDComponents {
   project_name: string
   project_version: string
@@ -60,17 +63,27 @@ async function uploadDocuments(files: File[]): Promise<UploadResponse> {
     formData.append('files', file)
   })
 
-  const response = await fetch(`${API_URL}/api/documents/upload`, {
-    method: 'POST',
-    body: formData,
-  })
+  try {
+    console.log('Uploading to:', `${API_URL}/api/documents/upload`)
+    const response = await fetch(`${API_URL}/api/documents/upload`, {
+      method: 'POST',
+      body: formData,
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
+      console.error('Upload failed with status:', response.status, error)
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+    
+    return response.json()
+  } catch (error) {
+    console.error('Network error during upload:', error)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Cannot connect to server. Please ensure the backend is running on port 8000.')
+    }
+    throw error
   }
-  
-  return response.json()
 }
 
 async function uploadDocument(file: File): Promise<any> {
@@ -83,6 +96,51 @@ async function getSampleDFD(): Promise<DFDComponents> {
   
   if (!response.ok) {
     throw new Error(`Failed to get sample DFD: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function extractDFDComponents(pipelineId: string): Promise<{
+  pipeline_id: string
+  dfd_components: DFDComponents
+  validation: any
+  status: string
+}> {
+  const response = await fetch(`${API_URL}/api/documents/extract-dfd`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pipeline_id: pipelineId
+    })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'DFD extraction failed' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function reviewDFDComponents(pipelineId: string, dfdComponents: DFDComponents): Promise<{
+  pipeline_id: string
+  dfd_components: DFDComponents
+  status: string
+  reviewed_at: string
+}> {
+  const response = await fetch(`${API_URL}/api/documents/review-dfd`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pipeline_id: pipelineId,
+      dfd_components: dfdComponents
+    })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'DFD review failed' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
   }
   
   return response.json()
@@ -230,6 +288,8 @@ export const api = {
   uploadDocuments,
   uploadDocument,  // Legacy support
   getSampleDFD,
+  extractDFDComponents,
+  reviewDFDComponents,
   
   // Pipeline methods
   createPipeline,

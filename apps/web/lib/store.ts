@@ -5,6 +5,7 @@ import type { DFDComponents, PipelineStatus } from './api'
 export type PipelineStep = 
   | 'document_upload'
   | 'dfd_extraction' 
+  | 'dfd_review'
   | 'threat_generation'
   | 'threat_refinement'
   | 'attack_path_analysis'
@@ -88,6 +89,7 @@ const initialStepState: PipelineStepState = {
 const initialStepStates: Record<PipelineStep, PipelineStepState> = {
   document_upload: { ...initialStepState },
   dfd_extraction: { ...initialStepState },
+  dfd_review: { ...initialStepState },
   threat_generation: { ...initialStepState },
   threat_refinement: { ...initialStepState },
   attack_path_analysis: { ...initialStepState },
@@ -223,6 +225,7 @@ export const useStore = create<StoreState>()(
           const steps: PipelineStep[] = [
             'document_upload',
             'dfd_extraction',
+            'dfd_review',
             'threat_generation',
             'threat_refinement',
             'attack_path_analysis'

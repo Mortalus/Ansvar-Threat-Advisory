@@ -13,6 +13,7 @@ class PipelineStep(str, Enum):
     """Pipeline step identifiers"""
     DOCUMENT_UPLOAD = "document_upload"
     DFD_EXTRACTION = "dfd_extraction"
+    DFD_REVIEW = "dfd_review"
     THREAT_GENERATION = "threat_generation"
     THREAT_REFINEMENT = "threat_refinement"
     ATTACK_PATH_ANALYSIS = "attack_path_analysis"
@@ -127,6 +128,9 @@ class PipelineManager:
             elif step == PipelineStep.DFD_EXTRACTION:
                 result = await self._handle_dfd_extraction(pipeline_id, data)
             
+            elif step == PipelineStep.DFD_REVIEW:
+                result = await self._handle_dfd_review(pipeline_id, data)
+            
             elif step == PipelineStep.THREAT_GENERATION:
                 result = await self._handle_threat_generation(pipeline_id, data)
             
@@ -184,7 +188,11 @@ class PipelineManager:
         if not document_text:
             raise ValueError("No document text provided")
         
+        # Store document text in pipeline for later use
+        self.pipelines[pipeline_id]["document_text"] = document_text
+        
         return {
+            "document_text": document_text,
             "text_length": len(document_text),
             "status": "uploaded"
         }
@@ -237,6 +245,52 @@ class PipelineManager:
         self.pipelines[pipeline_id]["dfd_components"] = dfd_components
         
         return result
+    
+    async def _handle_dfd_review(
+        self,
+        pipeline_id: str,
+        data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Handle DFD review step - allows user to review and edit extracted DFD components.
+        
+        Args:
+            pipeline_id: Pipeline identifier
+            data: Must contain 'dfd_components' key with updated DFD data
+        
+        Returns:
+            Updated DFD components
+        """
+        # Get current DFD components from pipeline
+        pipeline = self.pipelines.get(pipeline_id)
+        if not pipeline:
+            raise ValueError(f"Pipeline {pipeline_id} not found")
+        
+        current_dfd = pipeline.get("dfd_components")
+        if not current_dfd:
+            raise ValueError("DFD components not found. Run DFD extraction first.")
+        
+        # Get updated DFD components from request data
+        updated_dfd_data = data.get("dfd_components")
+        if not updated_dfd_data:
+            raise ValueError("No updated DFD components provided")
+        
+        # Validate the updated DFD components
+        try:
+            updated_dfd = DFDComponents(**updated_dfd_data)
+        except Exception as e:
+            raise ValueError(f"Invalid DFD components format: {e}")
+        
+        # Store the updated DFD components
+        self.pipelines[pipeline_id]["dfd_components"] = updated_dfd
+        
+        logger.info(f"DFD review completed for pipeline {pipeline_id}")
+        
+        return {
+            "dfd_components": updated_dfd.model_dump(),
+            "reviewed_at": datetime.utcnow().isoformat(),
+            "status": "reviewed"
+        }
     
     async def _handle_threat_generation(
         self,

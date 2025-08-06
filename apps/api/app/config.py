@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     environment: str = "development"  # Alternative name
     log_level: str = "INFO"
     
-    # CORS
+    # CORS - Extremely permissive for Docker deployment
     frontend_url: str = "http://localhost:3001"
-    cors_origins: str = "http://localhost:3000,http://localhost:3001"
+    cors_origins: str = "*"  # Allow all origins for Docker deployment
     
     # Redis (optional)
     redis_url: Optional[str] = None
@@ -95,5 +95,7 @@ if not settings.scaleway_api_key and settings.scw_api_key:
 # Parse CORS origins if needed
 def get_cors_origins():
     """Get CORS origins as a list"""
+    if settings.cors_origins == "*":
+        return ["*"]  # Allow all origins
     origins = settings.cors_origins.split(',')
     return [origin.strip() for origin in origins]

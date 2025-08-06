@@ -3,6 +3,7 @@ from typing import List, Optional
 import PyPDF2
 import io
 import logging
+from pydantic import BaseModel
 from app.core.pipeline.manager import PipelineManager, PipelineStep
 from app.models.dfd import DFDComponents
 
@@ -11,6 +12,9 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 # Maximum file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
+
+class ExtractDFDRequest(BaseModel):
+    pipeline_id: str
 
 async def extract_text_from_file(file: UploadFile) -> str:
     """Extract text content from uploaded file"""
@@ -109,15 +113,15 @@ async def upload_documents(
     # Log extraction success
     logger.info(f"Successfully extracted {len(combined_text)} characters from {len(processed_files)} files")
     
-    # Trigger DFD extraction pipeline
+    # Create pipeline but don't automatically run DFD extraction
     try:
         # Create pipeline run
         pipeline_id = await pipeline_manager.create_pipeline()
         
-        # Execute DFD extraction step
-        dfd_result = await pipeline_manager.execute_step(
+        # Execute document upload step only
+        upload_result = await pipeline_manager.execute_step(
             pipeline_id=pipeline_id,
-            step=PipelineStep.DFD_EXTRACTION,
+            step=PipelineStep.DOCUMENT_UPLOAD,
             data={"document_text": combined_text}
         )
         
@@ -125,12 +129,12 @@ async def upload_documents(
             "pipeline_id": pipeline_id,
             "files": processed_files,
             "text_length": len(combined_text),
-            "dfd_components": dfd_result,
-            "status": "success"
+            "document_upload_result": upload_result,
+            "status": "uploaded"
         }
     
     except Exception as e:
-        logger.error(f"Pipeline execution failed: {e}")
+        logger.error(f"Pipeline creation failed: {e}")
         # Still return the extracted text info even if pipeline fails
         return {
             "files": processed_files,
@@ -139,6 +143,97 @@ async def upload_documents(
             "pipeline_status": "failed",
             "error": str(e)
         }
+
+@router.post("/extract-dfd", response_model=dict)
+async def extract_dfd_from_documents(
+    request: ExtractDFDRequest,
+    pipeline_manager: PipelineManager = Depends(lambda: PipelineManager())
+):
+    """
+    Manually trigger DFD extraction for an uploaded document pipeline.
+    """
+    try:
+        # Extract pipeline_id from request body
+        pipeline_id = request.pipeline_id
+        
+        # Get the pipeline to check if document upload is complete
+        pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+        
+        # Check if document upload step is complete
+        if pipeline["steps"]["document_upload"]["status"] != "completed":
+            raise HTTPException(
+                status_code=400, 
+                detail="Document upload must be completed before DFD extraction"
+            )
+        
+        # Get the document text from the pipeline
+        document_text = pipeline.get("document_text")
+        if not document_text:
+            # Fallback to results if not in main pipeline data
+            document_text = pipeline["results"].get("document_upload", {}).get("document_text")
+        
+        if not document_text:
+            raise HTTPException(
+                status_code=400,
+                detail="No document text found in pipeline"
+            )
+        
+        # Execute DFD extraction step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DFD_EXTRACTION,
+            data={"document_text": document_text}
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "dfd_components": result["dfd_components"],
+            "validation": result["validation"],
+            "status": "extracted"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"DFD extraction failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"DFD extraction failed: {str(e)}"
+        )
+
+@router.post("/review-dfd", response_model=dict)
+async def review_dfd_components(
+    pipeline_id: str,
+    dfd_components: DFDComponents,
+    pipeline_manager: PipelineManager = Depends(lambda: PipelineManager())
+):
+    """
+    Review and update DFD components extracted from documents.
+    This step allows users to edit the extracted DFD before proceeding to threat generation.
+    """
+    try:
+        # Execute DFD review step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DFD_REVIEW,
+            data={"dfd_components": dfd_components.model_dump()}
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "dfd_components": result["dfd_components"],
+            "status": "reviewed",
+            "reviewed_at": result["reviewed_at"]
+        }
+    
+    except Exception as e:
+        logger.error(f"DFD review failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"DFD review failed: {str(e)}"
+        )
 
 @router.get("/sample", response_model=DFDComponents)
 async def get_sample_dfd():
