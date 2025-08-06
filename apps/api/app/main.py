@@ -9,7 +9,10 @@ from datetime import datetime
 from app.config import settings, get_cors_origins
 
 # Import routers
-from app.api.endpoints import documents, pipeline, websocket, llm, tasks
+from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base
+
+# Import startup tasks
+from app.startup import run_startup_tasks
 
 # Configure logging
 logging.basicConfig(
@@ -24,7 +27,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Threat Modeling API...")
     
     # Startup actions
-    # TODO: Initialize database connections, cache, etc.
+    logger.info("Initializing default data...")
+    run_startup_tasks()
+    logger.info("Application startup completed")
     
     yield
     
@@ -54,6 +59,8 @@ app.include_router(documents.router, prefix="/api")
 app.include_router(pipeline.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
+app.include_router(threats.router)
+app.include_router(knowledge_base.router)
 app.include_router(websocket.router)
 
 # Health check endpoint

@@ -25,7 +25,7 @@ async def test_provider(provider: str):
             )
         
         # Try to get the provider
-        llm = get_llm_provider(step="default")
+        llm = await get_llm_provider(step="default")
         
         # Test the connection
         is_working = await llm.validate_connection()

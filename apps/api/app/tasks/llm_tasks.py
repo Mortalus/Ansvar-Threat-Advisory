@@ -85,7 +85,7 @@ async def _extract_dfd_async(pipeline_id: str, document_text: str, llm_config: O
     """Async DFD extraction implementation"""
     
     # Get LLM provider
-    provider = get_llm_provider(step="dfd_extraction", config_override=llm_config)
+    provider = await get_llm_provider(step="dfd_extraction")
     
     # Extract DFD components
     dfd_components = await extract_dfd_from_text(

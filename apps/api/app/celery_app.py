@@ -11,6 +11,7 @@ celery_app = Celery(
     include=[
         "app.tasks.pipeline_tasks",
         "app.tasks.llm_tasks",
+        "app.tasks.knowledge_base_tasks",
     ]
 )
 
@@ -58,6 +59,16 @@ celery_app.conf.update(
 
 # Configure task queues - simplified for now, use default queue
 # celery_app.conf.task_queues can be added later if needed
+
+# Celery Beat schedule for periodic tasks
+from celery.schedules import crontab
+
+celery_app.conf.beat_schedule = {
+    'update-knowledge-bases-daily': {
+        'task': 'tasks.update_all_knowledge_bases',
+        'schedule': crontab(hour=2, minute=0),  # Run daily at 2 AM
+    },
+}
 
 # Task annotations for specific configuration per task
 celery_app.conf.task_annotations = {

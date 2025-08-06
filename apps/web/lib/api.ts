@@ -56,6 +56,28 @@ export interface StepStatus {
   error: string | null
 }
 
+export interface Threat {
+  "Threat Category": string
+  "Threat Name": string
+  "Description": string
+  "Potential Impact": string
+  "Likelihood": string
+  "Suggested Mitigation": string
+  component_id: string
+  component_name: string
+  component_type: string
+}
+
+export interface ThreatGenerationResponse {
+  pipeline_id: string
+  threats: Threat[]
+  total_count: number
+  components_analyzed: number
+  knowledge_sources_used: string[]
+  generated_at: string
+  status: string
+}
+
 // Document endpoints
 async function uploadDocuments(files: File[]): Promise<UploadResponse> {
   const formData = new FormData()
@@ -140,6 +162,21 @@ async function reviewDFDComponents(pipelineId: string, dfdComponents: DFDCompone
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'DFD review failed' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function generateThreats(pipelineId: string): Promise<ThreatGenerationResponse> {
+  const response = await fetch(`${API_URL}/api/documents/generate-threats`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pipeline_id: pipelineId })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Threat generation failed' }))
     throw new Error(error.detail || `HTTP ${response.status}`)
   }
   
@@ -290,6 +327,7 @@ export const api = {
   getSampleDFD,
   extractDFDComponents,
   reviewDFDComponents,
+  generateThreats,
   
   // Pipeline methods
   createPipeline,

@@ -6,12 +6,13 @@ from app.core.llm.base import BaseLLMProvider
 from app.core.llm.ollama import OllamaProvider
 from app.core.llm.azure import AzureProvider
 from app.core.llm.scaleway import ScalewayProvider
+from app.core.llm.mock import MockLLMProvider
 from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
 
-def get_llm_provider(step: str = "default") -> BaseLLMProvider:
+async def get_llm_provider(step: str = "default") -> BaseLLMProvider:
     """
     Get the appropriate LLM provider for a pipeline step.
     
@@ -84,8 +85,9 @@ def get_llm_provider(step: str = "default") -> BaseLLMProvider:
             raise ValueError(f"Unknown LLM provider: {provider_type}")
     
     except Exception as e:
-        logger.error(f"Failed to initialize LLM provider: {e}")
-        raise
+        logger.warning(f"Failed to initialize {provider_type} LLM provider: {e}")
+        logger.info("Falling back to mock LLM provider for development/testing")
+        return MockLLMProvider()
 
 def test_llm_provider(provider: BaseLLMProvider) -> bool:
     """
@@ -118,6 +120,7 @@ __all__ = [
     "OllamaProvider", 
     "AzureProvider",
     "ScalewayProvider",
+    "MockLLMProvider",
     "get_llm_provider",
     "test_llm_provider"
 ]

@@ -2,13 +2,15 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { api } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye } from 'lucide-react'
+import { api, Threat } from '@/lib/api'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
 
 export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [threats, setThreats] = useState<Threat[]>([])
+  const [threatGenerationError, setThreatGenerationError] = useState<string | null>(null)
   
   const {
     currentStep,
@@ -185,6 +187,34 @@ export default function HomePage() {
       console.error('DFD extraction failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'DFD extraction failed'
       setStepStatus('dfd_extraction', 'error', errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateThreats = async () => {
+    if (!useStore.getState().currentPipelineId) {
+      console.error('No pipeline ID available')
+      return
+    }
+
+    setLoading(true)
+    setStepStatus('threat_generation', 'in_progress')
+    setThreatGenerationError(null)
+
+    try {
+      const result = await api.generateThreats(useStore.getState().currentPipelineId!)
+      
+      // Update state with generated threats
+      setThreats(result.threats)
+      setStepStatus('threat_generation', 'complete')
+      setStepResult('threat_generation', result)
+      
+    } catch (error) {
+      console.error('Threat generation failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Threat generation failed'
+      setThreatGenerationError(errorMessage)
+      setStepStatus('threat_generation', 'error', errorMessage)
     } finally {
       setLoading(false)
     }
@@ -433,12 +463,155 @@ export default function HomePage() {
             <div className="mb-6">
               <h2 className="text-2xl font-bold mb-2">Threat Generation</h2>
               <p className="text-gray-400">
-                Identifying potential security threats based on your system architecture
+                Identifying potential security threats using RAG-powered AI analysis
               </p>
             </div>
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-gray-500">Threat generation coming soon...</p>
-            </div>
+
+            {/* Check prerequisites */}
+            {stepStates.dfd_review.status !== 'complete' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2">DFD Review Required</p>
+                  <p className="text-gray-400 mb-4">
+                    Please complete and review your DFD components before generating threats.
+                  </p>
+                  <button
+                    onClick={() => setCurrentStep('dfd_review')}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all"
+                  >
+                    Go to DFD Review
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Ready to start */}
+            {stepStates.dfd_review.status === 'complete' && stepStates.threat_generation.status === 'pending' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-blue-500/10 border border-blue-500/30 rounded-xl max-w-md">
+                  <div className="w-16 h-16 rounded-full gradient-purple-blue flex items-center justify-center mx-auto mb-4">
+                    <Shield className="w-8 h-8 text-white" />
+                  </div>
+                  <p className="text-lg font-semibold mb-2">Ready for Threat Analysis</p>
+                  <p className="text-gray-400 mb-6">
+                    AI will analyze your DFD components using real threat intelligence to identify potential security risks.
+                  </p>
+                  <button
+                    onClick={handleGenerateThreats}
+                    disabled={isLoading}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
+                  >
+                    <Target className="w-4 h-4" />
+                    {isLoading ? 'Generating Threats...' : 'Generate Threats'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* In progress */}
+            {stepStates.threat_generation.status === 'in_progress' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-lg">Analyzing threats with AI...</p>
+                  <p className="text-gray-400 mt-2">This may take a few moments</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {threatGenerationError && (
+              <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                <p className="text-red-400">{threatGenerationError}</p>
+                <button
+                  onClick={handleGenerateThreats}
+                  className="ml-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Success - show threats */}
+            {stepStates.threat_generation.status === 'complete' && threats.length > 0 && (
+              <div className="flex-1 overflow-auto">
+                <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <p className="text-green-400">Found {threats.length} potential threats!</p>
+                  </div>
+                  <button
+                    onClick={() => setCurrentStep('threat_refinement')}
+                    className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Refine Threats
+                  </button>
+                </div>
+
+                {/* Threat Summary Cards */}
+                <div className="grid gap-4">
+                  {threats.map((threat, index) => {
+                    const getCategoryColor = (category: string) => {
+                      const colors: Record<string, string> = {
+                        'Spoofing': 'border-red-500/30 bg-red-500/10 text-red-400',
+                        'Tampering': 'border-orange-500/30 bg-orange-500/10 text-orange-400',
+                        'Repudiation': 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
+                        'Information Disclosure': 'border-purple-500/30 bg-purple-500/10 text-purple-400',
+                        'Denial of Service': 'border-blue-500/30 bg-blue-500/10 text-blue-400',
+                        'Elevation of Privilege': 'border-green-500/30 bg-green-500/10 text-green-400',
+                      }
+                      return colors[category] || 'border-gray-500/30 bg-gray-500/10 text-gray-400'
+                    }
+
+                    const getImpactColor = (impact: string) => {
+                      return impact === 'High' ? 'text-red-400' : 
+                             impact === 'Medium' ? 'text-yellow-400' : 'text-green-400'
+                    }
+
+                    return (
+                      <div key={index} className="card-bg rounded-xl p-6 border border-[#2a2a4a]">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(threat['Threat Category'])}`}>
+                                {threat['Threat Category']}
+                              </span>
+                              <span className={`text-sm font-medium ${getImpactColor(threat['Potential Impact'])}`}>
+                                {threat['Potential Impact']} Impact
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-semibold text-white mb-1">{threat['Threat Name']}</h3>
+                            <p className="text-sm text-gray-400">Component: {threat.component_name}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-300 mb-1">Description:</p>
+                            <p className="text-gray-400">{threat['Description']}</p>
+                          </div>
+                          
+                          <div className="flex items-center gap-6 text-sm">
+                            <div>
+                              <span className="text-gray-300">Likelihood: </span>
+                              <span className={getImpactColor(threat['Likelihood'])}>{threat['Likelihood']}</span>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <p className="text-sm font-medium text-gray-300 mb-1">Suggested Mitigation:</p>
+                            <p className="text-gray-400">{threat['Suggested Mitigation']}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )
 

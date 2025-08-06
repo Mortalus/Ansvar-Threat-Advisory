@@ -107,6 +107,10 @@ class PipelineStepResult(BaseModel):
     llm_model = Column(String(100), nullable=True)
     token_usage = Column(JSON, nullable=True)  # Track token consumption
     
+    # Versioning fields
+    prompt_id = Column(Integer, ForeignKey("prompts.id"), nullable=True)
+    embedding_model = Column(String(100), nullable=True)  # For RAG steps
+    
     # Quality metrics
     confidence_score = Column(Integer, nullable=True)  # 0-100
     validation_passed = Column(Boolean, default=True, nullable=False)

@@ -241,6 +241,9 @@ class ReviewDFDRequest(BaseModel):
     pipeline_id: str
     dfd_components: DFDComponents
 
+class GenerateThreatsRequest(BaseModel):
+    pipeline_id: str
+
 @router.post("/review-dfd", response_model=dict)
 async def review_dfd_components(
     request: ReviewDFDRequest,
@@ -274,6 +277,55 @@ async def review_dfd_components(
         raise HTTPException(
             status_code=500,
             detail=f"DFD review failed: {str(e)}"
+        )
+
+@router.post("/generate-threats", response_model=dict)
+async def generate_threats(
+    request: GenerateThreatsRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """
+    Generate threats based on reviewed DFD components.
+    Uses RAG-powered AI to identify potential security threats.
+    """
+    try:
+        pipeline_id = request.pipeline_id
+        
+        # Verify that DFD review is complete
+        pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail=f"Pipeline {pipeline_id} not found")
+        
+        if pipeline["steps"]["dfd_review"]["status"] != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="DFD review must be completed before threat generation"
+            )
+        
+        # Execute threat generation step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.THREAT_GENERATION,
+            data={}
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "threats": result["threats"],
+            "total_count": result["total_count"],
+            "components_analyzed": result["components_analyzed"],
+            "knowledge_sources_used": result["knowledge_sources_used"],
+            "generated_at": result.get("generated_at"),
+            "status": "generated"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Threat generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Threat generation failed: {str(e)}"
         )
 
 @router.get("/sample", response_model=DFDComponents)

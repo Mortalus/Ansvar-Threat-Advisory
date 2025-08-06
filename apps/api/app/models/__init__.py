@@ -3,6 +3,9 @@
 from .base import Base, BaseModel
 from .pipeline import Pipeline, PipelineStep, PipelineStepResult, PipelineStatus, StepStatus
 from .user import User
+from .prompt import Prompt
+from .knowledge_base import KnowledgeBaseEntry
+from .threat_feedback import ThreatFeedback, ValidationAction
 
 __all__ = [
     "Base",
@@ -12,5 +15,9 @@ __all__ = [
     "PipelineStep",
     "PipelineStepResult",
     "PipelineStatus",
-    "StepStatus"
+    "StepStatus",
+    "Prompt",
+    "KnowledgeBaseEntry",
+    "ThreatFeedback",
+    "ValidationAction"
 ]

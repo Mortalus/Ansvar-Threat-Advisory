@@ -1,0 +1,25 @@
+Test System Architecture Document
+
+This document describes a simple web application architecture:
+
+External Entities:
+- Users: Web application users who login and access data
+- Admin: System administrators who manage the application
+
+Processes:
+- Authentication Service: Handles user login with database queries for credential verification
+- Payment Processor: Processes credit card transactions and handles payment data  
+- User Database: Stores user credentials, profiles, and authentication data
+
+Data Flows:
+- Users send login credentials to Authentication Service via HTTPS
+- Authentication Service queries User Database for credential verification
+- Payment Processor handles sensitive payment data and stores transaction records
+- Admin users access system logs and user management functions
+
+Trust Boundaries:
+- Internet to DMZ boundary
+- DMZ to Internal Network boundary
+- Application to Database boundary
+
+This system processes user authentication, payment data, and maintains user profiles.

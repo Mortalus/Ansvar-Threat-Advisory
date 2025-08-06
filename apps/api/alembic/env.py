@@ -11,7 +11,11 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.config import settings
-from app.models import Base
+# Import all models to ensure they're registered with metadata
+from app.models import (
+    Base, User, Pipeline, PipelineStep, PipelineStepResult,
+    Prompt, KnowledgeBaseEntry
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

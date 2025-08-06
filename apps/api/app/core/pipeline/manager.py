@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import get_llm_provider
 from app.core.pipeline.dfd_extraction_service import extract_dfd_from_text, validate_dfd_components
+from app.core.pipeline.steps.threat_generator import ThreatGenerator
 from app.models.dfd import DFDComponents
 from app.models import Pipeline, PipelineStep as PipelineStepModel, PipelineStatus, StepStatus
 from app.services import PipelineService
@@ -304,7 +305,7 @@ class PipelineManager:
         
         # Get LLM provider
         if not self.llm_provider:
-            self.llm_provider = get_llm_provider(step="dfd_extraction")
+            self.llm_provider = await get_llm_provider(step="dfd_extraction")
         
         logger.info(f"Starting DFD extraction for pipeline {pipeline_id}")
         
@@ -413,39 +414,27 @@ class PipelineManager:
         if not dfd_components:
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
-        # TODO: Implement threat generation logic
-        # For now, return a placeholder
-        result = {
-            "threats": [
-                {
-                    "id": "T001",
-                    "name": "SQL Injection",
-                    "category": "Input Validation",
-                    "severity": "High",
-                    "affected_component": "Web Server",
-                    "description": "Potential SQL injection in user input fields"
-                },
-                {
-                    "id": "T002",
-                    "name": "Weak Authentication",
-                    "category": "Authentication",
-                    "severity": "Medium",
-                    "affected_component": "API Gateway",
-                    "description": "API keys may be exposed in client-side code"
-                }
-            ],
-            "total_threats": 2,
-            "high_severity": 1,
-            "medium_severity": 1,
-            "low_severity": 0,
-            "generated_at": datetime.utcnow().isoformat()
-        }
+        # Use RAG-powered threat generator
+        threat_generator = ThreatGenerator()
+        
+        # Get the session from service
+        session = service.session if hasattr(service, 'session') else await self._get_session()
+        
+        # Execute threat generation with RAG - the threat generator doesn't need pipeline step result
+        result = await threat_generator.execute(
+            db_session=session,
+            pipeline_step_result=None,  # Not needed for this implementation
+            component_data=dfd_components
+        )
         
         # Store threats in pipeline database
         await service.update_pipeline_data(
             pipeline_id,
-            threats=result["threats"]
+            threats=result.get("threats", [])
         )
+        
+        # Add timestamp
+        result["generated_at"] = datetime.utcnow().isoformat()
         
         # Store step result
         await service.add_step_result(

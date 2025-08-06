@@ -33,6 +33,10 @@ psycopg2-binary==2.9.9
 aiosqlite==0.19.0
 alembic==1.12.1
 greenlet==3.0.1
+pgvector==0.2.0
+
+# Embeddings and RAG
+sentence-transformers==2.7.0
 
 # Redis (for caching and Celery broker)
 redis==5.0.1

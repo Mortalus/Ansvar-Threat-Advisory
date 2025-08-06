@@ -39,7 +39,12 @@ COPY . .
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/outputs/exports /app/outputs/reports /app/outputs/temp
+# Create sentence-transformers cache directory with proper permissions
+RUN mkdir -p /tmp/sentence_transformers_cache && chmod 777 /tmp/sentence_transformers_cache
 RUN chown -R appuser:appuser /app
+
+# Set environment variable for sentence-transformers cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
 
 # Switch to non-root user for security
 USER appuser
