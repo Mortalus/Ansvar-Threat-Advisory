@@ -429,6 +429,86 @@
             transform: translateY(-4px);
             box-shadow: 0 15px 40px rgba(124, 58, 237, 0.4);
         }
+
+        /* Pipeline Actions Styles */
+        .pipeline-actions {
+            margin-top: 2rem;
+        }
+
+        .action-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .action-card:hover {
+            background: var(--bg-hover);
+            border-color: rgba(102, 126, 234, 0.3);
+        }
+
+        .action-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .action-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .action-status {
+            background: rgba(160, 160, 192, 0.2);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .action-status.ready {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .action-status.processing {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .action-status.complete {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--info);
+        }
+
+        .action-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .action-card .btn {
+            margin-top: 0.5rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .action-card {
+                padding: 1rem;
+            }
+            
+            .action-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -509,13 +589,60 @@
             <div class="content-area">
                 <!-- Main panel -->
                 <div class="main-panel">
-                    <div class="upload-area">
+                    <div class="upload-area" id="upload-section">
                         <div class="upload-icon">📄</div>
                         <h2 style="margin-bottom: 0.5rem;">Drop files here or click to upload</h2>
                         <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
                             Supports PDF, DOCX, and TXT files up to 10MB
                         </p>
-                        <button class="btn btn-primary">Choose Files</button>
+                        <button class="btn btn-primary" onclick="uploadFiles()">Choose Files</button>
+                    </div>
+                    
+                    <!-- Pipeline Actions Section -->
+                    <div class="pipeline-actions" id="pipeline-actions" style="display: none;">
+                        <div class="action-card">
+                            <div class="action-header">
+                                <h3>🗺️ Data Flow Diagram Extraction</h3>
+                                <span class="action-status" id="dfd-status">Ready</span>
+                            </div>
+                            <p>Extract system components and data flows from uploaded documents</p>
+                            <button class="btn btn-primary" onclick="extractDFD()" id="extract-dfd-btn">
+                                <span>🔍</span> Extract DFD
+                            </button>
+                        </div>
+                        
+                        <div class="action-card">
+                            <div class="action-header">
+                                <h3>🎯 Threat Generation (V3 Multi-Agent)</h3>
+                                <span class="action-status" id="threat-status">Pending</span>
+                            </div>
+                            <p>Generate threats using AI-powered multi-agent analysis with architectural, business, and compliance perspectives</p>
+                            <button class="btn btn-primary" onclick="generateThreats()" id="generate-threats-btn" disabled>
+                                <span>🤖</span> Generate Threats (V3)
+                            </button>
+                        </div>
+                        
+                        <div class="action-card">
+                            <div class="action-header">
+                                <h3>✨ Threat Refinement</h3>
+                                <span class="action-status" id="refinement-status">Pending</span>
+                            </div>
+                            <p>Enhance and prioritize threats with business context and risk assessment</p>
+                            <button class="btn btn-primary" onclick="refineThreats()" id="refine-threats-btn" disabled>
+                                <span>⚡</span> Refine Threats
+                            </button>
+                        </div>
+                        
+                        <div class="action-card">
+                            <div class="action-header">
+                                <h3>🛤️ Attack Path Analysis</h3>
+                                <span class="action-status" id="attack-path-status">Pending</span>
+                            </div>
+                            <p>Analyze potential attack chains and identify critical defense priorities</p>
+                            <button class="btn btn-primary" onclick="analyzeAttackPaths()" id="analyze-attack-paths-btn" disabled>
+                                <span>🔗</span> Analyze Attack Paths
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -569,5 +696,218 @@
     
     <!-- Floating action button -->
     <button class="fab">💬</button>
+
+    <script>
+        // Global variables
+        let currentPipelineId = null;
+        const API_BASE = 'http://localhost:8000/api';
+
+        // Utility functions
+        function updateStatus(elementId, text, statusClass = '') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = text;
+                element.className = `action-status ${statusClass}`;
+            }
+        }
+
+        function setButtonState(buttonId, enabled, text) {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.disabled = !enabled;
+                if (text) {
+                    const span = button.querySelector('span');
+                    const textNode = button.childNodes[button.childNodes.length - 1];
+                    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+                        textNode.textContent = text;
+                    }
+                }
+            }
+        }
+
+        // Step 1: Upload Files
+        async function uploadFiles() {
+            try {
+                updateStatus('dfd-status', 'Processing...', 'processing');
+                
+                // Simulate file upload for demo
+                // In real implementation, this would handle actual file upload
+                const response = await fetch(`${API_BASE}/documents/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        files: [{ filename: 'demo-document.pdf', size: 1024000 }]
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    currentPipelineId = result.pipeline_id;
+                    
+                    // Show pipeline actions and hide upload
+                    document.getElementById('upload-section').style.display = 'none';
+                    document.getElementById('pipeline-actions').style.display = 'block';
+                    
+                    updateStatus('dfd-status', 'Ready', 'ready');
+                } else {
+                    throw new Error('Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                updateStatus('dfd-status', 'Error', 'error');
+            }
+        }
+
+        // Step 2: Extract DFD
+        async function extractDFD() {
+            if (!currentPipelineId) return;
+
+            try {
+                updateStatus('dfd-status', 'Processing...', 'processing');
+                setButtonState('extract-dfd-btn', false, ' Extracting...');
+
+                const response = await fetch(`${API_BASE}/documents/extract-dfd`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline_id: currentPipelineId,
+                        use_enhanced_extraction: true,
+                        enable_stride_review: true,
+                        enable_confidence_scoring: true,
+                        enable_security_validation: true
+                    })
+                });
+
+                if (response.ok) {
+                    updateStatus('dfd-status', 'Complete', 'complete');
+                    updateStatus('threat-status', 'Ready', 'ready');
+                    setButtonState('generate-threats-btn', true);
+                    setButtonState('extract-dfd-btn', true, ' Extract DFD');
+                } else {
+                    throw new Error('DFD extraction failed');
+                }
+            } catch (error) {
+                console.error('DFD extraction error:', error);
+                updateStatus('dfd-status', 'Error', 'error');
+                setButtonState('extract-dfd-btn', true, ' Extract DFD');
+            }
+        }
+
+        // Step 3: Generate Threats (V3 Multi-Agent)
+        async function generateThreats() {
+            if (!currentPipelineId) return;
+
+            try {
+                updateStatus('threat-status', 'Processing...', 'processing');
+                setButtonState('generate-threats-btn', false, ' Generating (V3)...');
+
+                const response = await fetch(`${API_BASE}/documents/generate-threats`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline_id: currentPipelineId
+                        // V3 is hardcoded in the backend, no need to specify flags
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateStatus('threat-status', 'Complete', 'complete');
+                    updateStatus('refinement-status', 'Ready', 'ready');
+                    setButtonState('refine-threats-btn', true);
+                    setButtonState('generate-threats-btn', true, ' Generate Threats (V3)');
+                    
+                    // Update progress in sidebar
+                    document.querySelector('.progress-value').textContent = 
+                        `${result.total_count || 0} threats across multiple categories`;
+                } else {
+                    throw new Error('Threat generation failed');
+                }
+            } catch (error) {
+                console.error('Threat generation error:', error);
+                updateStatus('threat-status', 'Error', 'error');
+                setButtonState('generate-threats-btn', true, ' Generate Threats (V3)');
+            }
+        }
+
+        // Step 4: Refine Threats
+        async function refineThreats() {
+            if (!currentPipelineId) return;
+
+            try {
+                updateStatus('refinement-status', 'Processing...', 'processing');
+                setButtonState('refine-threats-btn', false, ' Refining...');
+
+                const response = await fetch(`${API_BASE}/documents/refine-threats`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline_id: currentPipelineId
+                    })
+                });
+
+                if (response.ok) {
+                    updateStatus('refinement-status', 'Complete', 'complete');
+                    updateStatus('attack-path-status', 'Ready', 'ready');
+                    setButtonState('analyze-attack-paths-btn', true);
+                    setButtonState('refine-threats-btn', true, ' Refine Threats');
+                } else {
+                    throw new Error('Threat refinement failed');
+                }
+            } catch (error) {
+                console.error('Threat refinement error:', error);
+                updateStatus('refinement-status', 'Error', 'error');
+                setButtonState('refine-threats-btn', true, ' Refine Threats');
+            }
+        }
+
+        // Step 5: Analyze Attack Paths
+        async function analyzeAttackPaths() {
+            if (!currentPipelineId) return;
+
+            try {
+                updateStatus('attack-path-status', 'Processing...', 'processing');
+                setButtonState('analyze-attack-paths-btn', false, ' Analyzing Paths...');
+
+                const response = await fetch(`${API_BASE}/documents/analyze-attack-paths`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline_id: currentPipelineId,
+                        max_path_length: 5,
+                        max_paths_to_analyze: 20
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateStatus('attack-path-status', 'Complete', 'complete');
+                    setButtonState('analyze-attack-paths-btn', true, ' Analyze Attack Paths');
+                    
+                    // Update progress in sidebar
+                    const attackPathsElement = document.querySelector('.progress-item:last-child .progress-value');
+                    if (attackPathsElement) {
+                        attackPathsElement.textContent = 
+                            `${result.attack_paths?.length || 0} paths analyzed, ${result.critical_scenarios?.length || 0} critical`;
+                    }
+                    
+                    alert(`🎉 Attack Path Analysis Complete!\\n\\nFound ${result.attack_paths?.length || 0} attack paths\\nIdentified ${result.critical_scenarios?.length || 0} critical scenarios\\nGenerated ${result.defense_priorities?.length || 0} defense recommendations`);
+                } else {
+                    throw new Error('Attack path analysis failed');
+                }
+            } catch (error) {
+                console.error('Attack path analysis error:', error);
+                updateStatus('attack-path-status', 'Error', 'error');
+                setButtonState('analyze-attack-paths-btn', true, ' Analyze Attack Paths');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Threat Modeling Pipeline UI Loaded');
+            console.log('✅ V3 Multi-Agent Threat Generation is hardcoded and ready');
+            console.log('🛤️ Attack Path Analysis button is now available');
+        });
+    </script>
 </body>
 </html>

@@ -455,77 +455,39 @@ class PipelineManager:
         if not dfd_components:
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
-        # Check which generator version is requested (V3 is now default)
-        use_v1 = data.get("use_v1_generator", False) or data.get("basic", False)
-        use_v2 = data.get("use_v2_generator", False) or data.get("context_aware", False)
-        use_v3 = data.get("use_v3_generator", True) or data.get("multi_agent", True)  # Default to True
+        # HARDCODED: Always use V3 - user will never use V1/V2
+        use_v1 = False
+        use_v2 = False  
+        use_v3 = True
         
-        # Priority logic: explicit v1 or v2 override default v3
-        if use_v1 or use_v2:
-            use_v3 = False
+        # Log the hardcoded selection
+        logger.info("=== THREAT GENERATOR VERSION SELECTION (HARDCODED) ===")
+        logger.info("🚀 HARDCODED: Always using V3 Multi-Agent Threat Generation")
+        logger.info(f"Request data received but ignored: {data}")
+        logger.info(f"Forced flags: use_v1={use_v1}, use_v2={use_v2}, use_v3={use_v3}")
         
-        if use_v3 and not (use_v1 or use_v2):
-            logger.info("Using Threat Generator V3 with multi-agent analysis")
-            threat_generator = ThreatGeneratorV3()
-            
-            # Get original document text if available for comprehensive analysis
-            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
-            
-            # Get the session from service
-            session = service.session if hasattr(service, 'session') else await self._get_session()
-            
-            # Execute V3 threat generation with multi-agent system
-            result = await threat_generator.execute(
-                db_session=session,
-                pipeline_step_result=None,
-                component_data=dfd_components,
-                document_text=document_text
-            )
-        elif use_v2:
-            logger.info("Using Threat Generator V2 with context-aware risk scoring")
-            threat_generator = ThreatGeneratorV2()
-            
-            # Get original document text if available for control parsing
-            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
-            
-            # Get the session from service
-            session = service.session if hasattr(service, 'session') else await self._get_session()
-            
-            # Execute V2 threat generation with context awareness
-            result = await threat_generator.execute(
-                db_session=session,
-                pipeline_step_result=None,
-                component_data=dfd_components,
-                document_text=document_text
-            )
-        elif use_v1:
-            # Use original RAG-powered threat generator (V1)
-            logger.info("Using Threat Generator V1 (original RAG-powered)")
-            threat_generator = ThreatGenerator()
-            
-            # Get the session from service
-            session = service.session if hasattr(service, 'session') else await self._get_session()
-            
-            # Execute threat generation with RAG - the threat generator doesn't need pipeline step result
-            result = await threat_generator.execute(
-                db_session=session,
-                pipeline_step_result=None,  # Not needed for this implementation
-                component_data=dfd_components
-            )
-        else:
-            # Fallback to V3 if no specific version requested (should not reach here due to default logic above)
-            logger.info("Fallback: Using Threat Generator V3 with multi-agent analysis")
-            threat_generator = ThreatGeneratorV3()
-            
-            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
-            session = service.session if hasattr(service, 'session') else await self._get_session()
-            
-            result = await threat_generator.execute(
-                db_session=session,
-                pipeline_step_result=None,
-                component_data=dfd_components,
-                document_text=document_text
-            )
+        # Always execute V3 since it's hardcoded
+        logger.info("🚀 === EXECUTING THREAT GENERATOR V3 (MULTI-AGENT) ===")
+        logger.info("🤖 V3 Features: Multi-agent analysis, context-aware risk scoring, executive summaries")
+        logger.info("🔧 V3 Agents: Architectural Risk + Business Financial + Compliance Governance")
+        threat_generator = ThreatGeneratorV3()
+        
+        # Get original document text if available for comprehensive analysis
+        document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
+        logger.info(f"📄 Document text available for V3 analysis: {document_text is not None}")
+        
+        # Get the session from service
+        session = service.session if hasattr(service, 'session') else await self._get_session()
+        
+        # Execute V3 threat generation with multi-agent system
+        logger.info("⚡ Starting V3 multi-agent threat generation...")
+        result = await threat_generator.execute(
+            db_session=session,
+            pipeline_step_result=None,
+            component_data=dfd_components,
+            document_text=document_text
+        )
+        logger.info("✅ V3 Multi-agent threat generation completed successfully!")
         
         # Store threats in pipeline database
         await service.update_pipeline_data(
@@ -535,6 +497,19 @@ class PipelineManager:
         
         # Add timestamp
         result["generated_at"] = datetime.utcnow().isoformat()
+        
+        # Log final results summary
+        logger.info("📊 === THREAT GENERATION SUMMARY ===")
+        logger.info(f"🎯 Total threats generated: {result.get('total_count', len(result.get('threats', [])))}")
+        logger.info(f"🔧 Components analyzed: {result.get('components_analyzed', 'N/A')}")
+        logger.info(f"🔍 Knowledge sources used: {result.get('knowledge_sources_used', 'N/A')}")
+        if 'threat_breakdown' in result:
+            breakdown = result['threat_breakdown']
+            logger.info(f"🤖 V3 Threat breakdown - Technical: {breakdown.get('technical_stride', 0)}, "
+                       f"Architectural: {breakdown.get('architectural', 0)}, "
+                       f"Business: {breakdown.get('business', 0)}, "
+                       f"Compliance: {breakdown.get('compliance', 0)}")
+        logger.info("=== THREAT GENERATION COMPLETE ===")
         
         # Store step result
         await service.add_step_result(

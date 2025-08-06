@@ -1011,7 +1011,9 @@ class MultiAgentOrchestrator:
         # Run all agents concurrently for faster execution
         import asyncio
         
-        logger.info(f"Running {len(self.agents)} agents concurrently...")
+        logger.info("🤖 === V3 MULTI-AGENT ORCHESTRATOR STARTING ===")
+        logger.info(f"🚀 Running {len(self.agents)} specialized agents concurrently...")
+        logger.info("🎯 Agents: Architectural Risk + Business Financial + Compliance Governance")
         start_time = asyncio.get_event_loop().time()
         
         # Create concurrent tasks for all agents
@@ -1030,7 +1032,7 @@ class MultiAgentOrchestrator:
                     logger.error(f"{agent.name} failed: {result}")
                     continue
                 
-                logger.info(f"{agent.name} completed successfully")
+                logger.info(f"✅ {agent.name} completed successfully - Found {len(agent_threats)} threats")
                 agent_threats = result
                 
                 # Categorize findings
@@ -1044,7 +1046,9 @@ class MultiAgentOrchestrator:
                 all_findings['consolidated_threats'].extend(agent_threats)
                 
             execution_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"All agents completed in {execution_time:.1f}s (concurrent execution)")
+            logger.info(f"🎉 === V3 MULTI-AGENT ANALYSIS COMPLETE ===")
+            logger.info(f"⚡ All {len(self.agents)} agents completed in {execution_time:.1f}s (concurrent execution)")
+            logger.info(f"📊 Total consolidated threats: {len(all_findings['consolidated_threats'])}")
                 
         except Exception as e:
             logger.error(f"Critical error in multi-agent execution: {e}")
