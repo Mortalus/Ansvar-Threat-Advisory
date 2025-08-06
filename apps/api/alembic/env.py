@@ -22,9 +22,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set the database URL from our settings
+# Set the database URL from our settings (convert async URL to sync for Alembic)
 if settings.database_url:
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    # Convert async database URL to sync for Alembic
+    sync_db_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://").replace("aiosqlite://", "sqlite://")
+    config.set_main_option("sqlalchemy.url", sync_db_url)
 else:
     # Default to SQLite for development
     config.set_main_option("sqlalchemy.url", "sqlite:///./threat_modeling.db")

@@ -1,51 +1,153 @@
-version: '3.8'
-
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: threat_modeling
+      POSTGRES_USER: threat_user
+      POSTGRES_PASSWORD: secure_password_123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_modeling"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Celery broker and caching
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # FastAPI Backend
   api:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=http://localhost:3001,http://localhost:3000,http://web:3000
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./inputs:/app/inputs
+      - ./outputs:/app/outputs
+      - api_uploads:/app/uploads
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+
+  # Celery Worker for background jobs
+  celery-worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      - postgres
+      - redis
+      - api
+    volumes:
+      - ./inputs:/app/inputs
+      - ./outputs:/app/outputs
+      - api_uploads:/app/uploads
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+
+  # Celery Beat (optional - for scheduled tasks)
+  celery-beat:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      - postgres
+      - redis
+      - api
+    volumes:
+      - ./inputs:/app/inputs
+      - ./outputs:/app/outputs
+    command: celery -A app.celery_app beat --loglevel=info
+
+  # Celery Flower - Task monitoring UI
+  celery-flower:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./apps/api/.env
     depends_on:
       - redis
-    volumes:
-      - ./apps/api:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: celery -A app.celery_app flower --port=5555
 
+  # Next.js Frontend
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+      - NODE_ENV=production
     depends_on:
       - api
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # Ollama for local LLM (optional)
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
     deploy:
       resources:
         reservations:
@@ -53,7 +155,11 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    profiles:
+      - ollama  # Only start with --profile ollama
 
 volumes:
+  postgres_data:
   redis_data:
   ollama_data:
+  api_uploads:

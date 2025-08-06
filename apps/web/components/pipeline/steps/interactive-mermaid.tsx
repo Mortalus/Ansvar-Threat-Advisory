@@ -27,16 +27,12 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
         background: '#0a0a0f',
         primaryColor: '#8b5cf6',
         primaryTextColor: '#ffffff',
-        primaryBorderColor: '#6d28d9',
+        primaryBorderColor: '#8b5cf6',
         lineColor: '#9ca3af',
         secondaryColor: '#374151',
-        tertiaryColor: '#1f2937',
+        tertiaryColor: '#6b7280',
         mainBkg: '#374151',
         secondBkg: '#4b5563',
-        tertiaryColor: '#6b7280',
-        primaryBorderColor: '#8b5cf6',
-        primaryTextColor: '#ffffff',
-        lineColor: '#9ca3af',
         sectionBkgColor: '#1f2937',
         altSectionBkgColor: '#374151',
         gridColor: '#4b5563',
@@ -187,12 +183,13 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
       if (!ctx) return
 
       // Get SVG dimensions
-      const bbox = svgRef.current.getBBox()
+      const svgElement = svgRef.current as SVGSVGElement
+      const bbox = svgElement.getBBox()
       canvas.width = bbox.width + 40
       canvas.height = bbox.height + 40
 
       // Convert SVG to image
-      const svgData = new XMLSerializer().serializeToString(svgRef.current)
+      const svgData = new XMLSerializer().serializeToString(svgElement)
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
       const svgUrl = URL.createObjectURL(svgBlob)
       
