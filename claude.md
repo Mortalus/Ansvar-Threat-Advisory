@@ -208,3 +208,60 @@ Styling: apps/web/app/globals.css
 Environment: apps/api/.env and apps/web/.env.local
 
 This structure allows for modular development where features can be added incrementally without breaking existing functionality.
+
+Newest addition:
+
+Perfect! I've fixed the Pydantic validation errors. The main issues were:
+📝 What was fixed:
+
+Updated config.py to include all the environment variables from your .env file
+Added extra = "ignore" in the Config class to prevent validation errors for undefined fields
+Updated the LLM provider factory to use settings object instead of os.getenv
+Created all missing __init__.py files for proper Python module structure
+
+🗂️ Required Directory Structure:
+Make sure your directory structure looks like this:
+apps/api/
+├── app/
+│   ├── __init__.py                    ✅ Created
+│   ├── main.py
+│   ├── config.py                      ✅ Fixed
+│   ├── api/
+│   │   ├── __init__.py                ✅ Created
+│   │   └── endpoints/
+│   │       ├── __init__.py
+│   │       ├── documents.py
+│   │       ├── pipeline.py
+│   │       ├── websocket.py
+│   │       └── llm.py
+│   ├── core/
+│   │   ├── __init__.py                ✅ Created
+│   │   ├── llm/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── ollama.py
+│   │   │   ├── azure.py
+│   │   │   └── scaleway.py
+│   │   └── pipeline/
+│   │       ├── __init__.py            ✅ Created
+│   │       ├── manager.py
+│   │       └── dfd_extraction_service.py
+│   └── models/
+│       ├── __init__.py                ✅ Created
+│       └── dfd.py
+├── requirements.txt
+├── .env
+└── venv/
+🚀 Now try running the backend again:
+bashcd apps/api
+source venv/bin/activate
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+The server should now start successfully! You should see:
+
+INFO: Uvicorn running on http://0.0.0.0:8000
+The API docs at http://localhost:8000/docs
+Health check at http://localhost:8000/health
+
+If you still get errors, they might be related to missing dependencies. Make sure you've installed all requirements:
+bashpip install -r requirements.txt
+The configuration now properly handles all your environment variables and won't throw validation errors.

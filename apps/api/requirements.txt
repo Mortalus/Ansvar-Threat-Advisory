@@ -1,14 +1,47 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
+# FastAPI and core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-dotenv==1.0.0
-pydantic==2.5.3
+
+# Pydantic for data validation
+pydantic==2.5.0
 pydantic-settings==2.1.0
-redis==5.0.1
-celery==5.3.4
-websockets==12.0
-aiofiles==23.2.1
-httpx==0.26.0
-openai==1.8.0
-pypdf==3.17.4
+
+# LLM and AI dependencies
+openai==1.6.1
+instructor==0.4.5
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Document processing
+PyPDF2==3.0.1
 python-docx==1.1.0
+pypandoc==1.12
+
+# WebSocket support
+websockets==12.0
+python-socketio==5.10.0
+
+# Database (for future use)
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+prisma==0.11.0
+
+# Redis (for caching)
+redis==5.0.1
+aioredis==2.0.1
+
+# Utilities
+pyyaml==6.0.1
+python-json-logger==2.0.7
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+
+# Development
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1

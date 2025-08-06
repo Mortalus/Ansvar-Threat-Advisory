@@ -1,64 +1,108 @@
+"""Scaleway LLM Provider"""
+
 import httpx
-from typing import Optional
+import json
+from typing import Optional, Dict, Any
 from app.core.llm.base import BaseLLMProvider, LLMResponse
 import logging
 
 logger = logging.getLogger(__name__)
 
 class ScalewayProvider(BaseLLMProvider):
-    """Scaleway AI provider implementation"""
+    """Provider for Scaleway AI models"""
     
-    async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> LLMResponse:
-        url = f"{self.config['endpoint']}/completions"
+    def __init__(
+        self,
+        api_key: str,
+        endpoint: str = "https://api.scaleway.ai/v1",
+        model: str = "llama-3.1-70b"
+    ):
+        super().__init__(model)
+        self.api_key = api_key
+        self.endpoint = endpoint.rstrip('/')
+        self.client = httpx.AsyncClient(
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            timeout=300.0  # 5 minute timeout
+        )
+    
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None
+    ) -> LLMResponse:
+        """Generate response using Scaleway AI"""
         
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        headers = {
-            "Authorization": f"Bearer {self.config['api_key']}",
-            "Content-Type": "application/json"
-        }
-        
         payload = {
-            "model": self.config["model"],
+            "model": self.model,
             "messages": messages,
-            "temperature": self.config.get("temperature", 0.7),
-            "max_tokens": self.config.get("max_tokens", 2000),
+            "temperature": temperature,
             "stream": False
         }
         
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=60.0
-                )
-                response.raise_for_status()
-                data = response.json()
-                
-                return LLMResponse(
-                    content=data["choices"][0]["message"]["content"],
-                    model=self.config["model"],
-                    provider="scaleway",
-                    usage=data.get("usage")
-                )
-            except Exception as e:
-                logger.error(f"Scaleway generation error: {e}")
-                raise
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        
+        try:
+            response = await self.client.post(
+                f"{self.endpoint}/chat/completions",
+                json=payload
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Parse Scaleway response format
+            choice = data.get("choices", [{}])[0]
+            message = choice.get("message", {})
+            usage = data.get("usage", {})
+            
+            return LLMResponse(
+                content=message.get("content", ""),
+                model=data.get("model", self.model),
+                usage={
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0)
+                },
+                metadata={
+                    "finish_reason": choice.get("finish_reason"),
+                    "id": data.get("id")
+                }
+            )
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Scaleway API error: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to generate with Scaleway: {e}")
+            raise
     
     async def validate_connection(self) -> bool:
-        url = f"{self.config['endpoint']}/models"
-        headers = {
-            "Authorization": f"Bearer {self.config['api_key']}"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(url, headers=headers, timeout=5.0)
-                return response.status_code == 200
-            except:
-                return False
+        """Check if Scaleway AI is accessible"""
+        try:
+            # Try a simple completion
+            response = await self.generate(
+                prompt="Hello",
+                max_tokens=5
+            )
+            return len(response.content) > 0
+            
+        except Exception as e:
+            logger.error(f"Failed to validate Scaleway connection: {e}")
+            return False
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()

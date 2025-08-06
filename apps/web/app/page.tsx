@@ -1,207 +1,458 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Shield, FileText, Network, AlertTriangle, RefreshCw, Route, Settings, Play, Upload, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { useStore } from '@/lib/store'
+import { api } from '@/lib/api'
+import { Upload, FileText, X, AlertCircle, CheckCircle } from 'lucide-react'
 
-export default function Home() {
-  const [currentStep, setCurrentStep] = useState('document_upload')
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  
+  const {
+    currentStep,
+    setCurrentStep,
+    uploadedFiles,
+    setUploadedFiles,
+    setDocumentText,
+    dfdComponents,
+    setDfdComponents,
+    setDfdValidation,
+    setPipelineId,
+    setStepStatus,
+    setStepResult,
+    isLoading,
+    setLoading,
+    stepStates,
+    updateFromPipelineStatus,
+  } = useStore()
 
-  const steps = [
-    { id: 'document_upload', name: 'Document Upload', icon: FileText },
-    { id: 'dfd_extraction', name: 'DFD Extraction', icon: Network },
-    { id: 'threat_generation', name: 'Threat Generation', icon: AlertTriangle },
-    { id: 'threat_refinement', name: 'Threat Refinement', icon: RefreshCw },
-    { id: 'attack_path_analysis', name: 'Attack Path Analysis', icon: Route },
-  ]
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    const pipelineId = useStore.getState().currentPipelineId
+    if (!pipelineId) return
 
-  const handleRunPipeline = () => {
-    setIsLoading(true)
-    setTimeout(() => setIsLoading(false), 2000)
-  }
+    const ws = api.connectWebSocket(pipelineId, {
+      onMessage: (data) => {
+        console.log('Pipeline update:', data)
+        if (data.status) {
+          updateFromPipelineStatus(data)
+        }
+      },
+      onError: (error) => {
+        console.error('WebSocket error:', error)
+      },
+    })
 
-  const handleDragOver = (e: React.DragEvent) => {
+    return () => {
+      ws.close()
+    }
+  }, [useStore.getState().currentPipelineId])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(true)
-  }
+  }, [])
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-  }
+  }, [])
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
+    
     const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) setUploadedFile(files[0])
+    await handleFiles(files)
+  }, [])
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : []
+    await handleFiles(files)
+  }, [])
+
+  const handleFiles = async (files: File[]) => {
+    if (files.length === 0) return
+
+    setUploadError(null)
+    setLoading(true)
+    setStepStatus('document_upload', 'in_progress')
+
+    try {
+      // Validate files
+      const validFiles = files.filter(file => {
+        const validTypes = ['application/pdf', 'text/plain', 'text/markdown']
+        const maxSize = 10 * 1024 * 1024 // 10MB
+        
+        if (!validTypes.includes(file.type) && !file.name.endsWith('.txt')) {
+          setUploadError(`Invalid file type: ${file.name}`)
+          return false
+        }
+        
+        if (file.size > maxSize) {
+          setUploadError(`File too large: ${file.name} (max 10MB)`)
+          return false
+        }
+        
+        return true
+      })
+
+      if (validFiles.length === 0) {
+        setStepStatus('document_upload', 'error', uploadError || 'No valid files')
+        return
+      }
+
+      // Store files in state
+      setUploadedFiles(validFiles)
+
+      // Upload to backend
+      console.log('Uploading files:', validFiles.map(f => f.name))
+      const response = await api.uploadDocuments(validFiles)
+      
+      console.log('Upload response:', response)
+
+      // Update state based on response
+      if (response.pipeline_id) {
+        setPipelineId(response.pipeline_id)
+      }
+
+      if (response.dfd_components) {
+        setDfdComponents(response.dfd_components)
+        setStepStatus('dfd_extraction', 'complete')
+        setStepResult('dfd_extraction', response.dfd_components)
+      }
+
+      if (response.text_length) {
+        setDocumentText(`Extracted ${response.text_length} characters`)
+      }
+
+      // Mark upload as complete
+      setStepStatus('document_upload', 'complete')
+      setStepResult('document_upload', { files: response.files })
+
+      // Auto-advance to next step if DFD extraction completed
+      if (response.dfd_components) {
+        setCurrentStep('threat_generation')
+      } else {
+        setCurrentStep('dfd_extraction')
+      }
+
+    } catch (error) {
+      console.error('Upload failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+      setUploadError(errorMessage)
+      setStepStatus('document_upload', 'error', errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const removeFile = useCallback(() => {
+    setUploadedFiles([])
+    setDocumentText('')
+    setDfdComponents(null)
+    setStepStatus('document_upload', 'pending')
+    setUploadError(null)
+  }, [])
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 'document_upload':
+        return (
+          <div className="h-full flex flex-col">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Upload Documents</h2>
+              <p className="text-gray-400">
+                Upload your system architecture documents to begin threat modeling
+              </p>
+            </div>
+
+            {uploadedFiles.length === 0 ? (
+              <div
+                className={`
+                  flex-1 border-2 border-dashed rounded-xl
+                  flex flex-col items-center justify-center transition-all
+                  ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-[#2a2a4a] hover:border-purple-500/50'}
+                  ${isLoading ? 'opacity-50 pointer-events-none' : ''}
+                `}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="file-upload"
+                  disabled={isLoading}
+                />
+                
+                <div className="w-24 h-24 rounded-2xl gradient-purple-blue flex items-center justify-center mb-6 shadow-lg">
+                  <Upload className="w-12 h-12 text-white" />
+                </div>
+                
+                <h3 className="text-xl font-semibold mb-2">
+                  {isLoading ? 'Processing...' : 'Drop files here or click to upload'}
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Supports PDF and TXT files up to 10MB each
+                </p>
+                
+                <label htmlFor="file-upload">
+                  <span className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all cursor-pointer inline-block">
+                    Choose Files
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col">
+                <div className="space-y-3 mb-6">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="p-4 rounded-xl bg-[#252541] flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-lg gradient-purple-blue flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      
+                      <div className="flex-1">
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-sm text-gray-400">
+                          {(file.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                      
+                      {!isLoading && (
+                        <button
+                          onClick={removeFile}
+                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                        >
+                          <X className="w-5 h-5 text-red-400" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {stepStates.document_upload.status === 'complete' && (
+                  <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <p className="text-green-400">Documents uploaded successfully!</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {uploadError && (
+              <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                <p className="text-red-400">{uploadError}</p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 'dfd_extraction':
+        return (
+          <div className="h-full flex flex-col">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">DFD Extraction</h2>
+              <p className="text-gray-400">
+                Analyzing documents to extract system components and data flows
+              </p>
+            </div>
+
+            {stepStates.dfd_extraction.status === 'in_progress' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-lg">Extracting DFD components...</p>
+                  <p className="text-gray-400 mt-2">This may take a few moments</p>
+                </div>
+              </div>
+            )}
+
+            {dfdComponents && (
+              <div className="flex-1 overflow-auto">
+                <div className="space-y-6">
+                  <div className="card-bg rounded-xl p-6">
+                    <h3 className="text-lg font-semibold mb-3">Project Information</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Name:</span>
+                        <span>{dfdComponents.project_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Version:</span>
+                        <span>{dfdComponents.project_version}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Industry:</span>
+                        <span>{dfdComponents.industry_context}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="card-bg rounded-xl p-6">
+                      <h3 className="text-lg font-semibold mb-3">External Entities</h3>
+                      <div className="space-y-2">
+                        {dfdComponents.external_entities.map((entity, i) => (
+                          <div key={i} className="text-sm text-gray-300">{entity}</div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="card-bg rounded-xl p-6">
+                      <h3 className="text-lg font-semibold mb-3">Processes</h3>
+                      <div className="space-y-2">
+                        {dfdComponents.processes.map((process, i) => (
+                          <div key={i} className="text-sm text-gray-300">{process}</div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card-bg rounded-xl p-6">
+                    <h3 className="text-lg font-semibold mb-3">Data Flows</h3>
+                    <div className="space-y-3">
+                      {dfdComponents.data_flows.slice(0, 5).map((flow, i) => (
+                        <div key={i} className="p-3 bg-[#1a1a2e] rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium">{flow.source}</span>
+                            <span className="text-gray-500">→</span>
+                            <span className="text-sm font-medium">{flow.destination}</span>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            <span className="inline-block mr-3">{flow.protocol}</span>
+                            <span className="inline-block px-2 py-1 bg-purple-500/20 rounded">
+                              {flow.data_classification}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {dfdComponents.data_flows.length > 5 && (
+                        <p className="text-sm text-gray-400 text-center">
+                          +{dfdComponents.data_flows.length - 5} more flows
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+
+      case 'threat_generation':
+        return (
+          <div className="h-full flex flex-col">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Threat Generation</h2>
+              <p className="text-gray-400">
+                Identifying potential security threats based on your system architecture
+              </p>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500">Threat generation coming soon...</p>
+            </div>
+          </div>
+        )
+
+      case 'threat_refinement':
+        return (
+          <div className="h-full flex flex-col">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Threat Refinement</h2>
+              <p className="text-gray-400">
+                Refining and prioritizing identified threats
+              </p>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500">Threat refinement coming soon...</p>
+            </div>
+          </div>
+        )
+
+      case 'attack_path_analysis':
+        return (
+          <div className="h-full flex flex-col">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Attack Path Analysis</h2>
+              <p className="text-gray-400">
+                Analyzing potential attack paths and mitigation strategies
+              </p>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-500">Attack path analysis coming soon...</p>
+            </div>
+          </div>
+        )
+
+      default:
+        return null
+    }
   }
 
   return (
-    <div className="flex h-screen" style={{ background: 'var(--bg-dark)' }}>
-      {/* Background Effect */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full opacity-20" 
-          style={{ background: 'radial-gradient(circle, #667eea 0%, transparent 70%)' }} />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #764ba2 0%, transparent 70%)' }} />
-      </div>
-
-      {/* Sidebar */}
-      <aside className="w-80 card-bg border-r" style={{ borderColor: 'var(--border-color)' }}>
-        <div className="p-8">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl gradient-purple-blue flex items-center justify-center shadow-lg">
-              <Shield className="w-7 h-7 text-white" />
-            </div>
-            <span className="text-xl font-bold gradient-text">ThreatModel AI</span>
-          </div>
-
-          <nav className="space-y-2">
-            {steps.map((step, index) => {
-              const Icon = step.icon
+    <div className="min-h-screen bg-[#0a0a0f] text-white">
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div className="w-80 bg-[#151520] border-r border-[#2a2a4a] p-6">
+          <h1 className="text-2xl font-bold mb-8">Threat Modeling</h1>
+          
+          <div className="space-y-4">
+            {[
+              { id: 'document_upload', name: 'Document Upload' },
+              { id: 'dfd_extraction', name: 'DFD Extraction' },
+              { id: 'threat_generation', name: 'Threat Generation' },
+              { id: 'threat_refinement', name: 'Threat Refinement' },
+              { id: 'attack_path_analysis', name: 'Attack Path Analysis' },
+            ].map((step) => {
+              const status = stepStates[step.id as keyof typeof stepStates].status
               const isActive = currentStep === step.id
-
+              const isComplete = status === 'complete'
+              const isError = status === 'error'
+              const isInProgress = status === 'in_progress'
+              
               return (
                 <button
                   key={step.id}
-                  onClick={() => setCurrentStep(step.id)}
-                  className="w-full relative flex items-center gap-4 p-4 rounded-xl transition-all"
-                  style={{
-                    background: isActive ? 'var(--bg-hover)' : 'transparent',
-                    border: isActive ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid transparent',
-                  }}
+                  onClick={() => setCurrentStep(step.id as any)}
+                  className={`
+                    w-full text-left p-4 rounded-xl transition-all
+                    ${isActive ? 'bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/50' : 
+                      'hover:bg-[#252541]'}
+                  `}
                 >
-                  {isActive && (
-                    <div className="absolute inset-0 rounded-xl opacity-10 gradient-purple-blue" />
-                  )}
-                  
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold relative z-10 ${
-                    isActive ? 'gradient-purple-blue text-white shadow-lg' : ''
-                  }`}
-                  style={{
-                    background: !isActive ? 'var(--bg-hover)' : '',
-                    color: !isActive ? 'var(--text-secondary)' : '',
-                  }}>
-                    {index + 1}
-                  </div>
-
-                  <div className="flex-1 text-left relative z-10">
-                    <div className="font-semibold text-sm">{step.name}</div>
-                    <div className="text-xs opacity-60 mt-0.5">Pending</div>
+                  <div className="flex items-center gap-3">
+                    <div className={`
+                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold
+                      ${isComplete ? 'bg-green-500' : 
+                        isError ? 'bg-red-500' :
+                        isInProgress ? 'bg-purple-500 animate-pulse' :
+                        isActive ? 'gradient-purple-blue' : 
+                        'bg-[#2a2a4a]'}
+                    `}>
+                      {isComplete ? '✓' : 
+                       isError ? '!' :
+                       isInProgress ? '...' :
+                       ['1', '2', '3', '4', '5'][['document_upload', 'dfd_extraction', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
+                    </div>
+                    <span className={isActive ? 'font-semibold' : ''}>{step.name}</span>
                   </div>
                 </button>
               )
             })}
-          </nav>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="p-8">
-          <div className="card-bg rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">Security Requirements Analysis</h1>
-                <p className="opacity-60 mt-1">Upload your security documentation to begin threat modeling</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button className="px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all"
-                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-color)' }}>
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button
-                  onClick={handleRunPipeline}
-                  disabled={isLoading}
-                  className="px-6 py-2.5 gradient-purple-blue text-white rounded-xl shadow-lg hover:scale-105 transition-all disabled:opacity-50 flex items-center gap-2 font-medium"
-                >
-                  <Play className="w-4 h-4" />
-                  {isLoading ? 'Running...' : 'Run Pipeline'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Content Area */}
-        <div className="flex-1 p-8 pt-0">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-            {/* Main Panel */}
-            <div className="lg:col-span-2">
-              <div className="card-bg rounded-2xl p-8 h-full relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-80 h-80 opacity-10"
-                  style={{ background: 'radial-gradient(circle, #764ba2 0%, transparent 70%)' }} />
-                
-                {!uploadedFile ? (
-                  <div
-                    className={`relative z-10 h-full min-h-[400px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
-                      isDragging ? 'border-purple-500 bg-purple-500 bg-opacity-10' : ''
-                    }`}
-                    style={{ borderColor: isDragging ? '#667eea' : 'var(--border-color)' }}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    <div className="w-24 h-24 rounded-2xl gradient-purple-blue flex items-center justify-center mb-6 shadow-lg">
-                      <Upload className="w-12 h-12 text-white" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">Drop files here or click to upload</h3>
-                    <p className="opacity-60 mb-6">Supports PDF, DOCX, and TXT files up to 10MB</p>
-                    <button className="px-6 py-3 gradient-purple-blue text-white rounded-xl shadow-lg">
-                      Choose Files
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative z-10 flex items-center justify-center h-full">
-                    <div className="w-full max-w-md">
-                      <div className="p-4 rounded-xl flex items-center gap-4" style={{ background: 'var(--bg-hover)' }}>
-                        <div className="w-12 h-12 rounded-xl gradient-purple-blue flex items-center justify-center">
-                          <FileText className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium">{uploadedFile.name}</p>
-                          <p className="text-sm opacity-60">{(uploadedFile.size / 1024).toFixed(2)} KB</p>
-                        </div>
-                        <button onClick={() => setUploadedFile(null)} className="p-2 rounded-lg hover:bg-black hover:bg-opacity-20">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Status Panel */}
-            <div className="lg:col-span-1">
-              <div className="card-bg rounded-2xl p-6 h-full">
-                <h3 className="text-lg font-semibold mb-6">Pipeline Status</h3>
-                <div className="space-y-4">
-                  {[
-                    { label: 'Components Identified', value: '0 entities', icon: '📊' },
-                    { label: 'Threats Generated', value: '0 threats', icon: '🎯' },
-                    { label: 'Quality Score', value: 'Not calculated', icon: '🔍' },
-                    { label: 'Attack Paths', value: '0 paths', icon: '🛤️' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-hover)' }}>
-                      <span className="text-2xl">{item.icon}</span>
-                      <div className="flex-1">
-                        <p className="text-xs opacity-60">{item.label}</p>
-                        <p className="text-sm font-medium">{item.value}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </main>
+
+        {/* Main Content */}
+        <div className="flex-1 p-8 overflow-auto">
+          {renderStepContent()}
+        </div>
+      </div>
     </div>
   )
 }
