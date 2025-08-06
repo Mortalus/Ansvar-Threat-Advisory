@@ -59,6 +59,14 @@ async def execute_step_background(
             data=request.data
         )
         
+        # Send WebSocket notification that task was queued
+        try:
+            from app.api.endpoints.websocket import notify_task_queued
+            import asyncio
+            asyncio.create_task(notify_task_queued(request.pipeline_id, task.id, request.step))
+        except Exception as e:
+            logger.warning(f"Failed to send WebSocket notification: {e}")
+        
         logger.info(f"Queued step {request.step} for pipeline {request.pipeline_id}, task_id: {task.id}")
         
         return TaskResponse(
