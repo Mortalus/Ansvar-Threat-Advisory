@@ -76,9 +76,26 @@ export default function HomePage() {
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return
 
+    // Reset all state when new files are uploaded
     setUploadError(null)
     setLoading(true)
+    
+    // Clear previous pipeline data completely
+    setDfdComponents(null)
+    setDfdValidation(null)
+    setPipelineId('')
+    
+    // Clear any persisted stale data
+    const { resetPipeline } = useStore.getState()
+    resetPipeline()
+    
+    // Reset all step statuses
     setStepStatus('document_upload', 'in_progress')
+    setStepStatus('dfd_extraction', 'pending')
+    setStepStatus('dfd_review', 'pending')
+    setStepStatus('threat_generation', 'pending')
+    setStepStatus('threat_refinement', 'pending')
+    setStepStatus('attack_path_analysis', 'pending')
 
     try {
       // Validate files
@@ -362,7 +379,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {dfdComponents && dfdComponents.external_entities && (
+            {stepStates.dfd_extraction.status === 'complete' && dfdComponents && dfdComponents.external_entities && (
               <div className="flex-1 overflow-auto">
                 <div className="space-y-6">
                   {/* Summary Card */}

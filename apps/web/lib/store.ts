@@ -247,11 +247,25 @@ export const useStore = create<StoreState>()(
       {
         name: 'threat-modeling-store',
         partialize: (state) => ({
-          // Only persist essential data
+          // Only persist data tied to specific pipeline sessions
+          // Do not persist step states to avoid stale status showing
           currentPipelineId: state.currentPipelineId,
-          dfdComponents: state.dfdComponents,
-          threats: state.threats,
+          // Only persist DFD if it's tied to current pipeline
+          dfdComponents: state.currentPipelineId ? state.dfdComponents : null,
+          threats: state.currentPipelineId ? state.threats : null,
         }),
+        onRehydrateStorage: () => (state) => {
+          // Clear stale data when rehydrating from localStorage
+          if (state && (!state.currentPipelineId || !state.dfdComponents)) {
+            state.dfdComponents = null
+            state.dfdValidation = null
+            state.threats = []
+            state.refinedThreats = []
+            state.attackPaths = []
+            // Reset all step states to prevent stale status
+            state.stepStates = initialStepStates
+          }
+        },
       }
     )
   )

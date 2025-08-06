@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { api } from '@/lib/api'
-import { Save, CheckCircle, AlertCircle, ArrowRight, Code, Network, Copy } from 'lucide-react'
+import { Save, CheckCircle, AlertCircle, ArrowRight, Code, Network, Copy, Eye, Columns } from 'lucide-react'
 import type { DFDComponents } from '@/lib/api'
+import { InteractiveMermaid } from './interactive-mermaid'
 
 export function EnhancedDFDReview() {
   const {
@@ -18,7 +19,7 @@ export function EnhancedDFDReview() {
   } = useStore()
 
   const [jsonText, setJsonText] = useState('')
-  const [activeTab, setActiveTab] = useState<'json' | 'mermaid'>('json')
+  const [activeTab, setActiveTab] = useState<'json' | 'mermaid' | 'visual' | 'split'>('visual')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -264,6 +265,28 @@ export function EnhancedDFDReview() {
           Edit JSON
         </button>
         <button
+          onClick={() => setActiveTab('visual')}
+          className={`px-4 py-2 flex items-center gap-2 transition-all ${
+            activeTab === 'visual'
+              ? 'text-purple-400 border-b-2 border-purple-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Eye className="w-4 h-4" />
+          Interactive Diagram
+        </button>
+        <button
+          onClick={() => setActiveTab('split')}
+          className={`px-4 py-2 flex items-center gap-2 transition-all ${
+            activeTab === 'split'
+              ? 'text-purple-400 border-b-2 border-purple-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Columns className="w-4 h-4" />
+          Workshop View
+        </button>
+        <button
           onClick={() => setActiveTab('mermaid')}
           className={`px-4 py-2 flex items-center gap-2 transition-all ${
             activeTab === 'mermaid'
@@ -272,7 +295,7 @@ export function EnhancedDFDReview() {
           }`}
         >
           <Network className="w-4 h-4" />
-          Mermaid Diagram
+          Mermaid Code
         </button>
       </div>
 
@@ -302,6 +325,82 @@ export function EnhancedDFDReview() {
           </div>
         )}
 
+        {activeTab === 'visual' && (
+          <div className="h-full">
+            {mermaidCode && !parseError ? (
+              <InteractiveMermaid 
+                chart={mermaidCode} 
+                title={parsedDFD?.project_name || 'DFD Diagram'} 
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center bg-gray-500/10 border border-gray-500/30 rounded-xl">
+                <div className="text-center p-8">
+                  <Network className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2 text-gray-400">No Diagram Available</p>
+                  <p className="text-gray-500">
+                    {parseError ? 'Fix JSON errors to see diagram' : 'Enter valid JSON data to generate diagram'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'split' && (
+          <div className="h-full flex gap-4">
+            {/* JSON Editor Side */}
+            <div className="w-1/2 flex flex-col">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">Edit DFD Components</h3>
+                <button
+                  onClick={() => handleCopy(jsonText)}
+                  className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center gap-2 text-sm"
+                >
+                  {copied ? <CheckCircle className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <textarea
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
+                className="flex-1 p-4 bg-[#0a0a0f] border border-[#2a2a4a] rounded-xl text-white font-mono text-sm resize-none focus:outline-none focus:border-purple-500"
+                placeholder="Enter DFD JSON here..."
+                spellCheck={false}
+              />
+              {parseError && (
+                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-red-400 text-sm">{parseError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Diagram Side */}
+            <div className="w-1/2 flex flex-col">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">Live Diagram Preview</h3>
+                <p className="text-sm text-gray-400">Changes update in real-time</p>
+              </div>
+              <div className="flex-1 border border-[#2a2a4a] rounded-xl overflow-hidden">
+                {mermaidCode && !parseError ? (
+                  <InteractiveMermaid 
+                    chart={mermaidCode} 
+                    title={parsedDFD?.project_name || 'DFD Diagram'} 
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-gray-500/10">
+                    <div className="text-center p-6">
+                      <Network className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-400 text-sm">
+                        {parseError ? 'Fix JSON to see diagram' : 'Waiting for valid JSON'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'mermaid' && (
           <div className="h-full flex flex-col space-y-4">
             <div className="flex items-center justify-between">
@@ -325,13 +424,11 @@ export function EnhancedDFDReview() {
             
             <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
               <p className="text-blue-400 text-sm mb-2">
-                💡 <strong>Visualization:</strong> Copy the Mermaid code above and paste it into:
+                💡 <strong>Tip:</strong> Use the Interactive Diagram tab for better visualization, or copy this code to:
               </p>
               <ul className="text-blue-400 text-sm list-disc ml-6 space-y-1">
-                <li><a href="https://mermaid.live" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-300">Mermaid Live Editor</a> for immediate visualization</li>
-                <li>GitHub markdown files (natively supported)</li>
-                <li>VS Code with Mermaid preview extension</li>
-                <li>Notion pages using mermaid code blocks</li>
+                <li><a href="https://mermaid.live" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-300">Mermaid Live Editor</a></li>
+                <li>GitHub markdown files • VS Code • Notion pages</li>
               </ul>
             </div>
           </div>
