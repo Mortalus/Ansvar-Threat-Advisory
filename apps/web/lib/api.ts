@@ -78,6 +78,45 @@ export interface ThreatGenerationResponse {
   status: string
 }
 
+export interface ThreatRefinementResponse {
+  pipeline_id: string
+  refined_threats: RefinedThreat[]
+  total_count: number
+  refinement_stats: {
+    original_count: number
+    deduplicated_count: number
+    final_count: number
+    risk_distribution: Record<string, number>
+    refinement_timestamp: string
+  }
+  refined_at: string
+  status: string
+}
+
+export interface RefinedThreat extends Threat {
+  // Enhanced fields from refinement
+  risk_score?: string
+  business_risk_statement?: string
+  financial_impact_range?: string
+  regulatory_implications?: string
+  stakeholder_impact?: string
+  business_continuity_impact?: string
+  primary_mitigation?: string
+  secondary_mitigations?: string[]
+  implementation_priority?: string
+  estimated_effort?: string
+  success_metrics?: string
+  compliance_alignment?: string
+  priority_score?: number
+  priority_ranking?: string
+  priority_rank?: number
+  exploitability?: string
+  assessment_reasoning?: string
+  business_impact_description?: string
+  mitigation_maturity?: string
+  merged_from?: string[]
+}
+
 // Document endpoints
 async function uploadDocuments(files: File[]): Promise<UploadResponse> {
   const formData = new FormData()
@@ -177,6 +216,21 @@ async function generateThreats(pipelineId: string): Promise<ThreatGenerationResp
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Threat generation failed' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function refineThreats(pipelineId: string): Promise<ThreatRefinementResponse> {
+  const response = await fetch(`${API_URL}/api/documents/refine-threats`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pipeline_id: pipelineId })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Threat refinement failed' }))
     throw new Error(error.detail || `HTTP ${response.status}`)
   }
   
@@ -328,6 +382,7 @@ export const api = {
   extractDFDComponents,
   reviewDFDComponents,
   generateThreats,
+  refineThreats,
   
   // Pipeline methods
   createPipeline,

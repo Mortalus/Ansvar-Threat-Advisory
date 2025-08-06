@@ -449,25 +449,59 @@ class PipelineManager:
         data: Dict[str, Any],
         service: PipelineService
     ) -> Dict[str, Any]:
-        """Handle threat refinement step"""
-        # TODO: Implement threat refinement logic
-        result = {
-            "refined_threats": [],
-            "status": "pending_implementation",
-            "refined_at": datetime.utcnow().isoformat()
-        }
+        """Handle AI-powered threat refinement step"""
+        # Get pipeline to check if threat generation is complete
+        pipeline = await service.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise ValueError(f"Pipeline {pipeline_id} not found")
         
-        # Store refined threats in pipeline database (when implemented)
+        # Check if threat generation step is complete
+        threat_step = next((step for step in pipeline.steps if step.step_name == "threat_generation"), None)
+        if not threat_step or threat_step.status != StepStatus.COMPLETED:
+            raise ValueError("Threat generation must be completed before refinement")
+        
+        # Get threats from the threat generation step results
+        threat_result = next((result for result in threat_step.results 
+                            if result.result_type == "threats"), None)
+        if not threat_result:
+            raise ValueError("No threats found from threat generation step")
+        
+        threat_data = threat_result.result_data
+        if not threat_data or not threat_data.get("threats"):
+            raise ValueError("No threats found to refine")
+        
+        logger.info(f"Starting AI-powered refinement for pipeline {pipeline_id}")
+        
+        # Import and use the optimized AI-powered threat refiner
+        from app.core.pipeline.steps.threat_refiner import ThreatRefiner
+        
+        threat_refiner = ThreatRefiner()
+        
+        # Get the session from service
+        session = service.session if hasattr(service, 'session') else await self._get_session()
+        
+        # Execute threat refinement with AI capabilities
+        result = await threat_refiner.execute(
+            db_session=session,
+            pipeline_step_result=None,
+            threat_data=threat_data
+        )
+        
+        # Store refined threats in pipeline database
         await service.update_pipeline_data(
             pipeline_id,
-            refined_threats=result["refined_threats"]
+            refined_threats=result.get("refined_threats", [])
         )
+        
+        # Add timestamp
+        result["refined_at"] = datetime.utcnow().isoformat()
         
         # Store step result
         await service.add_step_result(
             pipeline_id, "threat_refinement", "refined_threats", result
         )
         
+        logger.info(f"Completed threat refinement for pipeline {pipeline_id}")
         return result
     
     async def _handle_attack_path_analysis(

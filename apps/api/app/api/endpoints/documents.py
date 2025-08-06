@@ -244,6 +244,9 @@ class ReviewDFDRequest(BaseModel):
 class GenerateThreatsRequest(BaseModel):
     pipeline_id: str
 
+class RefineThreatRequest(BaseModel):
+    pipeline_id: str
+
 @router.post("/review-dfd", response_model=dict)
 async def review_dfd_components(
     request: ReviewDFDRequest,
@@ -326,6 +329,55 @@ async def generate_threats(
         raise HTTPException(
             status_code=500,
             detail=f"Threat generation failed: {str(e)}"
+        )
+
+@router.post("/refine-threats", response_model=dict)
+async def refine_threats(
+    request: RefineThreatRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """
+    Refine generated threats using AI-powered analysis.
+    Enhances threats with business context, risk assessment, and prioritization.
+    """
+    try:
+        pipeline_id = request.pipeline_id
+        
+        # Verify that threat generation is complete
+        pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail=f"Pipeline {pipeline_id} not found")
+        
+        threat_gen_step = pipeline["steps"].get("threat_generation", {})
+        if threat_gen_step.get("status") != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Threat generation must be completed before refinement"
+            )
+        
+        # Execute threat refinement step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.THREAT_REFINEMENT,
+            data={}
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "refined_threats": result["refined_threats"],
+            "total_count": result["total_count"],
+            "refinement_stats": result["refinement_stats"],
+            "refined_at": result.get("refined_at"),
+            "status": "refined"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Threat refinement failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Threat refinement failed: {str(e)}"
         )
 
 @router.get("/sample", response_model=DFDComponents)

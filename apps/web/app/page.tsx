@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { api, Threat } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target } from 'lucide-react'
+import { api, Threat, RefinedThreat, ThreatRefinementResponse } from '@/lib/api'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
 
 export default function HomePage() {
@@ -11,6 +11,8 @@ export default function HomePage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [threats, setThreats] = useState<Threat[]>([])
   const [threatGenerationError, setThreatGenerationError] = useState<string | null>(null)
+  const [refinedThreats, setRefinedThreats] = useState<RefinedThreat[]>([])
+  const [threatRefinementError, setThreatRefinementError] = useState<string | null>(null)
   
   const {
     currentStep,
@@ -215,6 +217,34 @@ export default function HomePage() {
       const errorMessage = error instanceof Error ? error.message : 'Threat generation failed'
       setThreatGenerationError(errorMessage)
       setStepStatus('threat_generation', 'error', errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRefineThreats = async () => {
+    if (!useStore.getState().currentPipelineId) {
+      console.error('No pipeline ID available')
+      return
+    }
+
+    setLoading(true)
+    setStepStatus('threat_refinement', 'in_progress')
+    setThreatRefinementError(null)
+
+    try {
+      const result = await api.refineThreats(useStore.getState().currentPipelineId!)
+      
+      // Update state with refined threats
+      setRefinedThreats(result.refined_threats)
+      setStepStatus('threat_refinement', 'complete')
+      setStepResult('threat_refinement', result)
+      
+    } catch (error) {
+      console.error('Threat refinement failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Threat refinement failed'
+      setThreatRefinementError(errorMessage)
+      setStepStatus('threat_refinement', 'error', errorMessage)
     } finally {
       setLoading(false)
     }
@@ -619,14 +649,209 @@ export default function HomePage() {
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Threat Refinement</h2>
+              <h2 className="text-2xl font-bold mb-2">AI-Powered Threat Refinement</h2>
               <p className="text-gray-400">
-                Refining and prioritizing identified threats
+                Enhance threats with contextual risk analysis, business impact assessment, and intelligent prioritization
               </p>
             </div>
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-gray-500">Threat refinement coming soon...</p>
-            </div>
+
+            {/* Check prerequisites */}
+            {stepStates.threat_generation.status !== 'complete' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2">Threat Generation Required</p>
+                  <p className="text-gray-400 mb-4">
+                    Please complete threat generation before refining threats.
+                  </p>
+                  <button
+                    onClick={() => setCurrentStep('threat_generation')}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all"
+                  >
+                    Go to Threat Generation
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Ready to start */}
+            {stepStates.threat_generation.status === 'complete' && stepStates.threat_refinement.status === 'pending' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8 bg-blue-500/10 border border-blue-500/30 rounded-xl max-w-lg">
+                  <div className="w-16 h-16 rounded-full gradient-purple-blue flex items-center justify-center mx-auto mb-4">
+                    <Brain className="w-8 h-8 text-white" />
+                  </div>
+                  <p className="text-lg font-semibold mb-2">Ready for AI Enhancement</p>
+                  <p className="text-gray-400 mb-6">
+                    Our AI will analyze your {threats.length} threats to provide:
+                    <br />• Contextual risk scoring
+                    <br />• Business impact analysis  
+                    <br />• Enhanced mitigation strategies
+                    <br />• Intelligent prioritization
+                  </p>
+                  <button
+                    onClick={handleRefineThreats}
+                    disabled={isLoading}
+                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
+                  >
+                    <Brain className="w-4 h-4" />
+                    {isLoading ? 'Refining Threats...' : 'Refine with AI'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* In progress */}
+            {stepStates.threat_refinement.status === 'in_progress' && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-lg">AI is analyzing threats...</p>
+                  <p className="text-gray-400 mt-2">Applying contextual risk assessment and business impact analysis</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {threatRefinementError && (
+              <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                <p className="text-red-400">{threatRefinementError}</p>
+                <button
+                  onClick={handleRefineThreats}
+                  className="ml-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Success - show refined threats */}
+            {stepStates.threat_refinement.status === 'complete' && refinedThreats.length > 0 && (
+              <div className="flex-1 overflow-auto">
+                <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <p className="text-green-400">Successfully refined {refinedThreats.length} threats with AI!</p>
+                  </div>
+                  <button
+                    onClick={() => setCurrentStep('attack_path_analysis')}
+                    className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Attack Analysis
+                  </button>
+                </div>
+
+                {/* Refined Threat Cards */}
+                <div className="grid gap-4">
+                  {refinedThreats.map((threat, index) => {
+                    const getRiskColor = (risk: string) => {
+                      const colors: Record<string, string> = {
+                        'Critical': 'border-red-600/50 bg-red-600/10 text-red-400',
+                        'High': 'border-orange-500/50 bg-orange-500/10 text-orange-400',
+                        'Medium': 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400',
+                        'Low': 'border-green-500/50 bg-green-500/10 text-green-400',
+                      }
+                      return colors[risk] || 'border-gray-500/50 bg-gray-500/10 text-gray-400'
+                    }
+
+                    const getPriorityIcon = (priority: string) => {
+                      if (priority === 'Immediate') return '🚨'
+                      if (priority === 'High') return '⚡'
+                      if (priority === 'Medium') return '📋'
+                      return '📌'
+                    }
+
+                    return (
+                      <div key={index} className="card-bg rounded-xl p-6 border border-[#2a2a4a] hover:border-purple-500/30 transition-all">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getRiskColor(threat.risk_score || threat['Potential Impact'])}`}>
+                                {threat.risk_score || threat['Potential Impact']} Risk
+                              </span>
+                              {threat.priority_rank && (
+                                <span className="flex items-center gap-1 text-sm font-medium text-purple-400">
+                                  <Star className="w-3 h-3" />
+                                  #{threat.priority_rank}
+                                </span>
+                              )}
+                              <span className="text-xs bg-purple-600/20 text-purple-300 px-2 py-1 rounded-full">
+                                {getPriorityIcon(threat.implementation_priority || 'Medium')} {threat.implementation_priority || 'Medium'} Priority
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-semibold text-white mb-1">{threat['Threat Name']}</h3>
+                            <p className="text-sm text-gray-400">Component: {threat.component_name}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-sm font-medium text-gray-300 mb-1">Description:</p>
+                            <p className="text-gray-400">{threat['Description']}</p>
+                          </div>
+
+                          {/* AI-Enhanced Business Risk */}
+                          {threat.business_risk_statement && (
+                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                              <p className="text-sm font-medium text-blue-300 mb-1">🎯 Business Impact:</p>
+                              <p className="text-blue-100 text-sm">{threat.business_risk_statement}</p>
+                            </div>
+                          )}
+
+                          {/* Enhanced Mitigation */}
+                          {threat.primary_mitigation ? (
+                            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                              <p className="text-sm font-medium text-green-300 mb-1">🛡️ Enhanced Mitigation:</p>
+                              <p className="text-green-100 text-sm">{threat.primary_mitigation}</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-sm font-medium text-gray-300 mb-1">Suggested Mitigation:</p>
+                              <p className="text-gray-400">{threat['Suggested Mitigation']}</p>
+                            </div>
+                          )}
+
+                          {/* Risk Assessment Details */}
+                          <div className="flex flex-wrap items-center gap-4 text-sm">
+                            {threat.exploitability && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-300">Exploitability:</span>
+                                <span className={threat.exploitability === 'High' ? 'text-red-400' : 
+                                              threat.exploitability === 'Medium' ? 'text-yellow-400' : 'text-green-400'}>
+                                  {threat.exploitability}
+                                </span>
+                              </div>
+                            )}
+                            {threat.estimated_effort && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-300">Effort:</span>
+                                <span className="text-purple-400">{threat.estimated_effort}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-300">Likelihood:</span>
+                              <span className={threat['Likelihood'] === 'High' ? 'text-red-400' : 
+                                            threat['Likelihood'] === 'Medium' ? 'text-yellow-400' : 'text-green-400'}>
+                                {threat['Likelihood']}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* AI Assessment Reasoning */}
+                          {threat.assessment_reasoning && (
+                            <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-800/30 rounded border-l-2 border-purple-500/50">
+                              <span className="font-medium text-purple-300">AI Analysis:</span> {threat.assessment_reasoning}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )
 

@@ -301,7 +301,31 @@ For each significant threat, identify:
 5. Detection opportunities
 6. Mitigation strategies
 
-Format the response as structured JSON with clear attack chains."""
+Format the response as structured JSON with clear attack chains.""",
+            
+            "threat_refinement": """Refine and enhance the following cybersecurity threats with intelligent analysis.
+
+Threats to Refine:
+{threats}
+
+Component Context:
+{components}
+
+Perform the following refinement tasks:
+1. Identify and merge semantically similar threats
+2. Assess risk levels based on component exposure and business impact
+3. Generate business-focused risk statements
+4. Enhance mitigation recommendations with specific, actionable controls
+5. Calculate priority scores based on exploitability and business criticality
+
+For each refined threat, provide:
+- Enhanced description with business context
+- Accurate risk scoring (Critical/High/Medium/Low)
+- Specific, implementable mitigation strategies
+- Business impact assessment
+- Implementation priority
+
+Format the response as a JSON array of refined threat objects."""
         }
         
         for name, template in default_prompts.items():
