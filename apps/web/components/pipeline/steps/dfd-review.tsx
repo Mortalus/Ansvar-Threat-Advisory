@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { api } from '@/lib/api'
-import { Edit3, Save, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react'
+import { Edit3, Save, CheckCircle, AlertCircle, ArrowRight, Eye, FileText } from 'lucide-react'
 import type { DFDComponents, DataFlow } from '@/lib/api'
+import { DFDVisualization } from './dfd-visualization'
 
 interface EditableDFDComponents extends DFDComponents {
   // Add any additional editable fields if needed
@@ -25,6 +26,7 @@ export function DFDReviewStep() {
   const [editedDFD, setEditedDFD] = useState<EditableDFDComponents | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeView, setActiveView] = useState<'edit' | 'visualize'>('edit')
 
   // Initialize edited DFD when component loads
   useEffect(() => {
@@ -185,34 +187,65 @@ export function DFDReviewStep() {
           </div>
           
           <div className="flex gap-3">
-            {!editing ? (
+            {/* View Toggle */}
+            <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
               <button
-                onClick={handleEdit}
-                className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                onClick={() => setActiveView('edit')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
+                  activeView === 'edit' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
               >
-                <Edit3 className="w-4 h-4" />
-                Edit DFD
+                <FileText className="w-4 h-4" />
+                Edit
               </button>
-            ) : (
+              <button
+                onClick={() => setActiveView('visualize')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
+                  activeView === 'visualize' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                Visualize
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            {activeView === 'edit' && (
               <>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? 'Saving...' : 'Save & Continue'}
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(false)
-                    setEditedDFD(dfdComponents)
-                    setStepStatus('dfd_review', 'pending')
-                  }}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
+                {!editing ? (
+                  <button
+                    onClick={handleEdit}
+                    className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Edit DFD
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      {saving ? 'Saving...' : 'Save & Continue'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditing(false)
+                        setEditedDFD(dfdComponents)
+                        setStepStatus('dfd_review', 'pending')
+                      }}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -234,7 +267,10 @@ export function DFDReviewStep() {
       )}
 
       <div className="flex-1 overflow-auto">
-        <div className="space-y-6">
+        {activeView === 'visualize' ? (
+          <DFDVisualization dfdComponents={currentDFD} />
+        ) : (
+          <div className="space-y-6">
           {/* Project Information */}
           <div className="card-bg rounded-xl p-6">
             <h3 className="text-lg font-semibold mb-4">Project Information</h3>
@@ -518,6 +554,7 @@ export function DFDReviewStep() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

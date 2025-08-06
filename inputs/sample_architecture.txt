@@ -1,0 +1,72 @@
+E-Commerce Platform Architecture Document
+Version: 2.0
+Date: January 2025
+
+System Overview:
+Our e-commerce platform is a modern web application that allows customers to browse products, manage shopping carts, and complete purchases online. The system integrates with multiple payment providers and shipping partners.
+
+Architecture Components:
+
+External Users and Systems:
+- Customers: End users who browse and purchase products
+- Store Administrators: Internal users who manage inventory and orders
+- Payment Gateway (Stripe): External payment processing service
+- Shipping API (FedEx/UPS): External shipping providers
+- Email Service (SendGrid): External email notification service
+
+Core Processes:
+- Web Application Server: Next.js frontend application
+- API Gateway: Node.js Express server handling all API requests
+- Authentication Service: Auth0 integration for user authentication
+- Order Processing Service: Handles order workflow and validation
+- Inventory Management Service: Tracks product availability
+- Notification Service: Manages email and SMS notifications
+
+Data Stores:
+- User Database (PostgreSQL): Stores customer profiles and credentials
+- Product Catalog (MongoDB): Stores product information and metadata
+- Order Database (PostgreSQL): Stores order history and transactions
+- Session Cache (Redis): Stores active user sessions
+- Image Storage (AWS S3): Stores product images and media
+
+Trust Boundaries:
+- Internet DMZ: Public-facing web servers
+- Application Tier: Internal application servers
+- Database Tier: Protected database servers
+- Third-party Services: External API integrations
+
+Data Flows:
+
+1. Customer Login Flow:
+   - Customer sends credentials to Web Application Server via HTTPS
+   - Web Application Server forwards to Authentication Service
+   - Authentication Service validates against User Database
+   - Session token stored in Session Cache
+   - Authentication: OAuth2 with JWT tokens
+
+2. Product Browsing:
+   - Customer requests product list from Web Application Server
+   - API Gateway queries Product Catalog
+   - Product data returned with images from Image Storage
+   - Data Classification: Public product information
+
+3. Order Placement:
+   - Customer submits order through Web Application Server
+   - Order Processing Service validates inventory
+   - Payment Gateway processes payment (PCI-compliant)
+   - Order stored in Order Database
+   - Data Classification: Confidential (payment information)
+
+4. Admin Operations:
+   - Store Administrator accesses admin panel
+   - Strong authentication required (MFA)
+   - Can modify Product Catalog and view Order Database
+   - All admin actions logged for audit
+
+Security Considerations:
+- All external communications use TLS 1.3
+- API endpoints protected with rate limiting
+- Input validation on all user inputs
+- Regular security audits and penetration testing
+- GDPR compliance for European customers
+- PCI DSS compliance for payment processing

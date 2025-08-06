@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { api } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight } from 'lucide-react'
-import { DFDReviewStep } from '@/components/pipeline/steps/dfd-review'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye } from 'lucide-react'
+import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
 
 export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
@@ -365,67 +365,40 @@ export default function HomePage() {
             {dfdComponents && dfdComponents.external_entities && (
               <div className="flex-1 overflow-auto">
                 <div className="space-y-6">
+                  {/* Summary Card */}
                   <div className="card-bg rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-3">Project Information</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Name:</span>
-                        <span>{dfdComponents.project_name || 'N/A'}</span>
+                    <h3 className="text-lg font-semibold mb-4">Extraction Summary</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-purple-400">{dfdComponents.external_entities?.length || 0}</div>
+                        <div className="text-sm text-gray-400">External Entities</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Version:</span>
-                        <span>{dfdComponents.project_version || 'N/A'}</span>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-400">{dfdComponents.processes?.length || 0}</div>
+                        <div className="text-sm text-gray-400">Processes</div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Industry:</span>
-                        <span>{dfdComponents.industry_context || 'N/A'}</span>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-400">{dfdComponents.assets?.length || 0}</div>
+                        <div className="text-sm text-gray-400">Assets</div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="card-bg rounded-xl p-6">
-                      <h3 className="text-lg font-semibold mb-3">External Entities</h3>
-                      <div className="space-y-2">
-                        {(dfdComponents.external_entities || []).map((entity, i) => (
-                          <div key={i} className="text-sm text-gray-300">{entity}</div>
-                        ))}
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-yellow-400">{dfdComponents.data_flows?.length || 0}</div>
+                        <div className="text-sm text-gray-400">Data Flows</div>
                       </div>
                     </div>
-
-                    <div className="card-bg rounded-xl p-6">
-                      <h3 className="text-lg font-semibold mb-3">Processes</h3>
-                      <div className="space-y-2">
-                        {(dfdComponents.processes || []).map((process, i) => (
-                          <div key={i} className="text-sm text-gray-300">{process}</div>
-                        ))}
+                    
+                    <div className="flex items-center justify-between p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                      <div>
+                        <p className="text-green-400 font-medium">DFD Extraction Complete</p>
+                        <p className="text-gray-400 text-sm">Review and edit the extracted components</p>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="card-bg rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-3">Data Flows</h3>
-                    <div className="space-y-3">
-                      {(dfdComponents.data_flows || []).slice(0, 5).map((flow, i) => (
-                        <div key={i} className="p-3 bg-[#1a1a2e] rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium">{flow.source}</span>
-                            <span className="text-gray-500">→</span>
-                            <span className="text-sm font-medium">{flow.destination}</span>
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            <span className="inline-block mr-3">{flow.protocol}</span>
-                            <span className="inline-block px-2 py-1 bg-purple-500/20 rounded">
-                              {flow.data_classification}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {(dfdComponents.data_flows || []).length > 5 && (
-                        <p className="text-sm text-gray-400 text-center">
-                          +{(dfdComponents.data_flows || []).length - 5} more flows
-                        </p>
-                      )}
+                      <button
+                        onClick={() => setCurrentStep('dfd_review')}
+                        className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        Continue to Review
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -435,7 +408,7 @@ export default function HomePage() {
         )
 
       case 'dfd_review':
-        return <DFDReviewStep />
+        return <EnhancedDFDReview />
 
       case 'threat_generation':
         return (

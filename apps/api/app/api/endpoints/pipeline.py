@@ -1,20 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List, Dict, Any
 from app.core.pipeline.manager import PipelineManager, PipelineStatus
+from app.dependencies import get_pipeline_manager
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
-
-# Singleton pipeline manager (in production, use dependency injection with proper lifecycle)
-_pipeline_manager = None
-
-def get_pipeline_manager() -> PipelineManager:
-    """Get or create pipeline manager instance"""
-    global _pipeline_manager
-    if _pipeline_manager is None:
-        _pipeline_manager = PipelineManager()
-    return _pipeline_manager
 
 @router.post("/create")
 async def create_pipeline(

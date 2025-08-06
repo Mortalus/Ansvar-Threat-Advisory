@@ -6,6 +6,7 @@ import logging
 from pydantic import BaseModel
 from app.core.pipeline.manager import PipelineManager, PipelineStep
 from app.models.dfd import DFDComponents
+from app.dependencies import get_pipeline_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -76,7 +77,7 @@ async def extract_text_from_file(file: UploadFile) -> str:
 @router.post("/upload", response_model=dict)
 async def upload_documents(
     files: List[UploadFile] = File(...),
-    pipeline_manager: PipelineManager = Depends(lambda: PipelineManager())
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
 ):
     """
     Upload one or more documents for DFD extraction.
@@ -147,7 +148,7 @@ async def upload_documents(
 @router.post("/extract-dfd", response_model=dict)
 async def extract_dfd_from_documents(
     request: ExtractDFDRequest,
-    pipeline_manager: PipelineManager = Depends(lambda: PipelineManager())
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
 ):
     """
     Manually trigger DFD extraction for an uploaded document pipeline.
@@ -155,11 +156,18 @@ async def extract_dfd_from_documents(
     try:
         # Extract pipeline_id from request body
         pipeline_id = request.pipeline_id
+        logger.info(f"Attempting to extract DFD for pipeline: {pipeline_id}")
         
         # Get the pipeline to check if document upload is complete
         pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        logger.info(f"Pipeline found: {pipeline is not None}")
+        
         if not pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            logger.warning(f"Pipeline {pipeline_id} not found in manager")
+            # Log all available pipelines for debugging
+            all_pipelines = await pipeline_manager.list_pipelines()
+            logger.info(f"Available pipelines: {[p['id'] for p in all_pipelines]}")
+            raise HTTPException(status_code=404, detail=f"Pipeline {pipeline_id} not found")
         
         # Check if document upload step is complete
         if pipeline["steps"]["document_upload"]["status"] != "completed":
@@ -203,17 +211,24 @@ async def extract_dfd_from_documents(
             detail=f"DFD extraction failed: {str(e)}"
         )
 
+class ReviewDFDRequest(BaseModel):
+    pipeline_id: str
+    dfd_components: DFDComponents
+
 @router.post("/review-dfd", response_model=dict)
 async def review_dfd_components(
-    pipeline_id: str,
-    dfd_components: DFDComponents,
-    pipeline_manager: PipelineManager = Depends(lambda: PipelineManager())
+    request: ReviewDFDRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
 ):
     """
     Review and update DFD components extracted from documents.
     This step allows users to edit the extracted DFD before proceeding to threat generation.
     """
     try:
+        # Extract request data
+        pipeline_id = request.pipeline_id
+        dfd_components = request.dfd_components
+        
         # Execute DFD review step
         result = await pipeline_manager.execute_step(
             pipeline_id=pipeline_id,
