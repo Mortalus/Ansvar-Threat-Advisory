@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import get_llm_provider
 from app.core.pipeline.dfd_extraction_service import extract_dfd_from_text, validate_dfd_components
 from app.core.pipeline.steps.threat_generator import ThreatGenerator
+from app.core.pipeline.steps.threat_generator_v2 import ThreatGeneratorV2
+from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
 from app.models.dfd import DFDComponents
 from app.models import Pipeline, PipelineStep as PipelineStepModel, PipelineStatus, StepStatus
 from app.services import PipelineService
@@ -414,18 +416,57 @@ class PipelineManager:
         if not dfd_components:
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
-        # Use RAG-powered threat generator
-        threat_generator = ThreatGenerator()
+        # Check which generator version is requested
+        use_v3 = data.get("use_v3_generator", False) or data.get("multi_agent", False)
+        use_v2 = data.get("use_v2_generator", False) or data.get("context_aware", False)
         
-        # Get the session from service
-        session = service.session if hasattr(service, 'session') else await self._get_session()
-        
-        # Execute threat generation with RAG - the threat generator doesn't need pipeline step result
-        result = await threat_generator.execute(
-            db_session=session,
-            pipeline_step_result=None,  # Not needed for this implementation
-            component_data=dfd_components
-        )
+        if use_v3:
+            logger.info("Using Threat Generator V3 with multi-agent analysis")
+            threat_generator = ThreatGeneratorV3()
+            
+            # Get original document text if available for comprehensive analysis
+            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
+            
+            # Get the session from service
+            session = service.session if hasattr(service, 'session') else await self._get_session()
+            
+            # Execute V3 threat generation with multi-agent system
+            result = await threat_generator.execute(
+                db_session=session,
+                pipeline_step_result=None,
+                component_data=dfd_components,
+                document_text=document_text
+            )
+        elif use_v2:
+            logger.info("Using Threat Generator V2 with context-aware risk scoring")
+            threat_generator = ThreatGeneratorV2()
+            
+            # Get original document text if available for control parsing
+            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
+            
+            # Get the session from service
+            session = service.session if hasattr(service, 'session') else await self._get_session()
+            
+            # Execute V2 threat generation with context awareness
+            result = await threat_generator.execute(
+                db_session=session,
+                pipeline_step_result=None,
+                component_data=dfd_components,
+                document_text=document_text
+            )
+        else:
+            # Use original RAG-powered threat generator
+            threat_generator = ThreatGenerator()
+            
+            # Get the session from service
+            session = service.session if hasattr(service, 'session') else await self._get_session()
+            
+            # Execute threat generation with RAG - the threat generator doesn't need pipeline step result
+            result = await threat_generator.execute(
+                db_session=session,
+                pipeline_step_result=None,  # Not needed for this implementation
+                component_data=dfd_components
+            )
         
         # Store threats in pipeline database
         await service.update_pipeline_data(

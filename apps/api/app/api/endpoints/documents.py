@@ -243,6 +243,10 @@ class ReviewDFDRequest(BaseModel):
 
 class GenerateThreatsRequest(BaseModel):
     pipeline_id: str
+    use_v2_generator: bool = False  # Enable V2 with context-aware risk scoring
+    context_aware: bool = False  # Alternative flag for V2
+    use_v3_generator: bool = False  # Enable V3 with multi-agent analysis
+    multi_agent: bool = False  # Alternative flag for V3
 
 class RefineThreatRequest(BaseModel):
     pipeline_id: str
@@ -305,11 +309,16 @@ async def generate_threats(
                 detail="DFD review must be completed before threat generation"
             )
         
-        # Execute threat generation step
+        # Execute threat generation step with version flags
         result = await pipeline_manager.execute_step(
             pipeline_id=pipeline_id,
             step=PipelineStep.THREAT_GENERATION,
-            data={}
+            data={
+                "use_v2_generator": request.use_v2_generator,
+                "context_aware": request.context_aware,
+                "use_v3_generator": request.use_v3_generator,
+                "multi_agent": request.multi_agent
+            }
         )
         
         return {
