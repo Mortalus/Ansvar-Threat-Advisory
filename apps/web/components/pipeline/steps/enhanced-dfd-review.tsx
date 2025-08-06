@@ -36,55 +36,71 @@ export function EnhancedDFDReview() {
     try {
       const parsed = JSON.parse(jsonText || '{}') as DFDComponents
       
-      // Generate Mermaid diagram
-      let diagram = 'graph TB\n'
+      // Generate top-down flowchart style diagram for workshop presentation
+      let diagram = 'flowchart TD\n'
       
       if (parsed.project_name) {
-        diagram += `    %% Project: ${parsed.project_name} v${parsed.project_version || '1.0'}\n`
-        diagram += `    %% Industry: ${parsed.industry_context || 'Unknown'}\n\n`
+        diagram += `    %% ${parsed.project_name} v${parsed.project_version || '1.0'} - ${parsed.industry_context || 'System'}\n\n`
       }
       
-      // Define external entities with square brackets
+      // Define all components with clean, workshop-friendly styling
+      
+      // External Entities with STRIDE threat modeling styling
       if (parsed.external_entities?.length) {
-        diagram += '    %% External Entities\n'
         parsed.external_entities.forEach((entity, idx) => {
           const id = `EE${idx}`
-          const sanitized = entity.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 20)
-          diagram += `    ${id}["${sanitized}"]\n`
-          diagram += `    style ${id} fill:#ff6b6b,stroke:#c92a2a,color:#fff\n`
+          const sanitized = entity.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 18)
+          // Use STRIDE External Entity icon
+          diagram += `    ${id}["🌐 ${sanitized}\\n(External Entity)"]\n`
+          diagram += `    style ${id} fill:#ff6b6b,stroke:#c92a2a,stroke-width:3px,color:#fff\n`
         })
         diagram += '\n'
       }
       
-      // Define processes with rounded rectangles
+      // Processes with STRIDE process styling
       if (parsed.processes?.length) {
-        diagram += '    %% Processes\n'
         parsed.processes.forEach((process, idx) => {
           const id = `P${idx}`
-          const sanitized = process.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 20)
-          diagram += `    ${id}("${sanitized}")\n`
-          diagram += `    style ${id} fill:#4c6ef5,stroke:#364fc7,color:#fff\n`
+          const sanitized = process.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 18)
+          // Use STRIDE Process icon
+          diagram += `    ${id}("⚙️ ${sanitized}\\n(Process)")\n`
+          diagram += `    style ${id} fill:#4c6ef5,stroke:#364fc7,stroke-width:3px,color:#fff\n`
         })
         diagram += '\n'
       }
       
-      // Define assets/data stores with cylinders
+      // Data Stores with STRIDE data store styling
       if (parsed.assets?.length) {
-        diagram += '    %% Data Stores/Assets\n'
         parsed.assets.forEach((asset, idx) => {
           const id = `DS${idx}`
-          const sanitized = asset.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 20)
-          diagram += `    ${id}[("${sanitized}")]\n`
-          diagram += `    style ${id} fill:#37b24d,stroke:#2b8a3e,color:#fff\n`
+          const sanitized = asset.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 18)
+          // Use STRIDE Data Store icon
+          diagram += `    ${id}[("🗄️ ${sanitized}\\n(Data Store)")]\n`
+          diagram += `    style ${id} fill:#37b24d,stroke:#2b8a3e,stroke-width:3px,color:#fff\n`
         })
         diagram += '\n'
       }
-      
-      // Define trust boundaries as subgraphs
+
+      // Add Trust Boundaries as simple subgraphs (after all nodes are defined)
       if (parsed.trust_boundaries?.length) {
-        diagram += '    %% Trust Boundaries (as comments)\n'
+        diagram += '    %% Trust Boundaries\n'
         parsed.trust_boundaries.forEach((boundary, idx) => {
-          diagram += `    %% Trust Boundary: ${boundary}\n`
+          const boundaryId = `TB${idx}`
+          const sanitizedBoundary = boundary.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 25)
+          
+          diagram += `    subgraph ${boundaryId}["🛡️ ${sanitizedBoundary}"]\n`
+          diagram += '        direction TB\n'
+          
+          // Add placeholder content for visual boundaries
+          diagram += `        TB${idx}_PLACEHOLDER["Security Perimeter:\\n${sanitizedBoundary}"]\n`
+          diagram += `        style TB${idx}_PLACEHOLDER fill:transparent,stroke:none,color:#ffd700\n`
+          
+          diagram += `    end\n`
+          
+          // Style the boundary
+          const boundaryColors = ['#2d3748', '#4a5568', '#1a202c', '#718096']
+          const color = boundaryColors[idx % boundaryColors.length]
+          diagram += `    style ${boundaryId} fill:${color},stroke:#ffd700,stroke-width:3px,color:#fff,stroke-dasharray: 5 5\n`
         })
         diagram += '\n'
       }
@@ -92,18 +108,49 @@ export function EnhancedDFDReview() {
       // Add data flows
       if (parsed.data_flows?.length) {
         diagram += '    %% Data Flows\n'
+        let flowIndex = 0 // Track flow index for styling
+        
+        // Helper function for fuzzy matching
+        const fuzzyMatch = (needle: string, haystack: string[]): number => {
+          // Try exact match first
+          const exactMatch = haystack.findIndex(item => item === needle)
+          if (exactMatch !== -1) return exactMatch
+          
+          // Try case-insensitive match
+          const lowerNeedle = needle.toLowerCase()
+          const caseMatch = haystack.findIndex(item => item.toLowerCase() === lowerNeedle)
+          if (caseMatch !== -1) return caseMatch
+          
+          // Try substring match (needle contains haystack or vice versa)
+          const substringMatch = haystack.findIndex(item => {
+            const lowerItem = item.toLowerCase()
+            return lowerNeedle.includes(lowerItem) || lowerItem.includes(lowerNeedle)
+          })
+          if (substringMatch !== -1) return substringMatch
+          
+          // Try word matching (any word in needle matches any word in haystack)
+          const needleWords = lowerNeedle.split(/\s+/)
+          const wordMatch = haystack.findIndex(item => {
+            const itemWords = item.toLowerCase().split(/\s+/)
+            return needleWords.some(nWord => itemWords.some(iWord => nWord.includes(iWord) || iWord.includes(nWord)))
+          })
+          
+          return wordMatch
+        }
+
         parsed.data_flows.forEach((flow, idx) => {
-          const sourceIdx = parsed.external_entities?.indexOf(flow.source) ?? -1
-          const destIdx = parsed.external_entities?.indexOf(flow.destination) ?? -1
-          const sourceProcessIdx = parsed.processes?.indexOf(flow.source) ?? -1
-          const destProcessIdx = parsed.processes?.indexOf(flow.destination) ?? -1
-          const sourceAssetIdx = parsed.assets?.indexOf(flow.source) ?? -1
-          const destAssetIdx = parsed.assets?.indexOf(flow.destination) ?? -1
+          // Use fuzzy matching for better component matching
+          const sourceIdx = fuzzyMatch(flow.source, parsed.external_entities || [])
+          const destIdx = fuzzyMatch(flow.destination, parsed.external_entities || [])
+          const sourceProcessIdx = fuzzyMatch(flow.source, parsed.processes || [])
+          const destProcessIdx = fuzzyMatch(flow.destination, parsed.processes || [])
+          const sourceAssetIdx = fuzzyMatch(flow.source, parsed.assets || [])
+          const destAssetIdx = fuzzyMatch(flow.destination, parsed.assets || [])
           
           let sourceId = null
           let destId = null
           
-          // Find source ID
+          // Find source ID (prefer external entities, then processes, then assets)
           if (sourceIdx !== -1) sourceId = `EE${sourceIdx}`
           else if (sourceProcessIdx !== -1) sourceId = `P${sourceProcessIdx}`
           else if (sourceAssetIdx !== -1) sourceId = `DS${sourceAssetIdx}`
@@ -114,11 +161,76 @@ export function EnhancedDFDReview() {
           else if (destAssetIdx !== -1) destId = `DS${destAssetIdx}`
           
           if (sourceId && destId) {
-            const label = `${flow.protocol || 'Unknown'}`
-            diagram += `    ${sourceId} -->|"${label}"| ${destId}\n`
+            // Clean, workshop-friendly labels
+            const dataType = flow.data_description || 'Data'
+            const protocol = flow.protocol || ''
+            
+            // Create concise label for flowchart
+            let label = dataType
+            if (protocol && protocol !== 'Unknown') {
+              label = `${protocol}: ${dataType}`
+            }
+            
+            // Limit label length for clean appearance
+            if (label.length > 25) {
+              label = label.substring(0, 22) + '...'
+            }
+            
+            // STRIDE-based data flow styling with threat indicators
+            let arrowStyle = '-->'
+            let arrowColor = ''
+            let threatIcon = ''
+            
+            // Color-code based on data sensitivity (explains red lines!)
+            if (flow.data_classification === 'Confidential' || flow.data_classification === 'PII') {
+              arrowStyle = '==>' // Thick arrows for sensitive data
+              arrowColor = 'stroke:#ff4444,stroke-width:4px' // RED = High Risk Data
+              threatIcon = '🔒' // Indicates potential I(nformation Disclosure) threats
+            } else if (flow.data_classification === 'Internal') {
+              arrowStyle = '-->'
+              arrowColor = 'stroke:#ffa500,stroke-width:3px' // ORANGE = Medium Risk Data  
+              threatIcon = '⚠️' // Indicates moderate risk
+            } else {
+              arrowStyle = '-->'
+              arrowColor = 'stroke:#4ade80,stroke-width:2px' // GREEN = Public/Low Risk Data
+              threatIcon = '✅' // Indicates lower risk
+            }
+            
+            // Enhanced label with STRIDE threat context
+            let enhancedLabel = `${threatIcon} ${label}`
+            if (flow.authentication_mechanism && flow.authentication_mechanism !== 'None') {
+              enhancedLabel += `\\n🔐 ${flow.authentication_mechanism}` // Shows authentication controls
+            }
+            
+            diagram += `    ${sourceId} ${arrowStyle}|"${enhancedLabel}"| ${destId}\n`
+            
+            // Add link styling with STRIDE color coding
+            diagram += `    linkStyle ${flowIndex} ${arrowColor}\n`
+            flowIndex++
           }
         })
       }
+
+      // Add STRIDE Threat Modeling Legend
+      diagram += '\n    %% STRIDE Threat Modeling Legend\n'
+      diagram += '    subgraph LEGEND["📋 STRIDE Threat Modeling Legend"]\n'
+      diagram += '        direction TB\n'
+      diagram += '        L1["🌐 External Entity - Potential S(poofing) threats"]\n'
+      diagram += '        L2["⚙️ Process - Potential T(ampering) & E(levation) threats"]\n'  
+      diagram += '        L3["🗄️ Data Store - Potential I(nfo Disclosure) & D(enial) threats"]\n'
+      diagram += '        L4["🔒 RED Lines = Confidential/PII Data (High Risk)"]\n'
+      diagram += '        L5["⚠️ ORANGE Lines = Internal Data (Medium Risk)"]\n'
+      diagram += '        L6["✅ GREEN Lines = Public Data (Low Risk)"]\n'
+      diagram += '        L7["🛡️ Trust Boundaries = Security Perimeters"]\n'
+      diagram += '    end\n'
+      diagram += '    style LEGEND fill:#1a1a2e,stroke:#8b5cf6,stroke-width:2px,color:#fff\n'
+      diagram += '    style L1 fill:#2d1b4e,stroke:#ff6b6b,color:#fff\n'
+      diagram += '    style L2 fill:#1e3a5f,stroke:#4c6ef5,color:#fff\n'
+      diagram += '    style L3 fill:#1e4d3b,stroke:#37b24d,color:#fff\n'
+      diagram += '    style L4 fill:#4a1e1e,stroke:#ff4444,color:#fff\n'
+      diagram += '    style L5 fill:#4a3a1e,stroke:#ffa500,color:#fff\n'
+      diagram += '    style L6 fill:#1e4a2e,stroke:#4ade80,color:#fff\n'
+      diagram += '    style L7 fill:#3a3a1e,stroke:#ffd700,color:#fff\n'
 
       return {
         parsedDFD: parsed,

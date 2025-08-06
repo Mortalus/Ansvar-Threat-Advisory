@@ -22,16 +22,28 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'dark',
+      theme: 'base',
       themeVariables: {
-        darkMode: true,
         background: '#0a0a0f',
         primaryColor: '#8b5cf6',
         primaryTextColor: '#ffffff',
         primaryBorderColor: '#6d28d9',
-        lineColor: '#6b7280',
+        lineColor: '#9ca3af',
         secondaryColor: '#374151',
         tertiaryColor: '#1f2937',
+        mainBkg: '#374151',
+        secondBkg: '#4b5563',
+        tertiaryColor: '#6b7280',
+        primaryBorderColor: '#8b5cf6',
+        primaryTextColor: '#ffffff',
+        lineColor: '#9ca3af',
+        sectionBkgColor: '#1f2937',
+        altSectionBkgColor: '#374151',
+        gridColor: '#4b5563',
+        c0: '#ff6b6b', // External entities - red
+        c1: '#4c6ef5', // Processes - blue  
+        c2: '#37b24d', // Assets - green
+        c3: '#ffd43b', // Trust boundaries - yellow
         fontSize: '14px',
         fontFamily: 'ui-sans-serif, system-ui, sans-serif'
       },
@@ -50,16 +62,13 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
     const renderDiagram = async () => {
       try {
         setRenderError(null)
-        console.log('Rendering Mermaid chart:', chart.substring(0, 100) + '...')
-        
         // Clear previous diagram
         if (containerRef.current) {
           containerRef.current.innerHTML = ''
         }
 
         // Validate and render
-        const { svg } = await mermaid.render('mermaid-diagram', chart)
-        console.log('Mermaid render successful, SVG length:', svg.length)
+        const { svg } = await mermaid.render(`mermaid-${Date.now()}`, chart)
         
         if (containerRef.current) {
           containerRef.current.innerHTML = svg
@@ -68,7 +77,6 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
           const svgElement = containerRef.current.querySelector('svg')
           if (svgElement) {
             svgRef.current = svgElement
-            console.log('SVG element found and styled')
             
             // Style the SVG
             svgElement.style.width = '100%'
@@ -79,8 +87,6 @@ export function InteractiveMermaid({ chart, title = "DFD Diagram" }: Interactive
             // Reset transform
             setTransform({ x: 0, y: 0, scale: 1 })
             applyTransform(svgElement, { x: 0, y: 0, scale: 1 })
-          } else {
-            console.error('SVG element not found after rendering')
           }
         }
       } catch (error) {
