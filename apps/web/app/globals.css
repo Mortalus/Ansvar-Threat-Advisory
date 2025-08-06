@@ -1,54 +1,6 @@
-/* Temporary fix: Replace Tailwind directives with basic CSS for Docker compatibility */
-/* @tailwind base; */
-/* @tailwind components; */
-/* @tailwind utilities; */
-
-/* Basic reset and dark theme styles */
-html, body {
-  background-color: #0a0a0f;
-  color: #ffffff;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.gradient-purple-blue {
-  background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-}
-
-.card-bg {
-  background-color: #1a1a2e;
-  border: 1px solid #374151;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-secondary {
-  background-color: #374151;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid #4b5563;
-  cursor: pointer;
-}
-
-.text-center { text-align: center; }
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.justify-center { justify-content: center; }
-.space-y-4 > * + * { margin-top: 1rem; }
-.space-y-6 > * + * { margin-top: 1.5rem; }
-.p-6 { padding: 1.5rem; }
-.p-8 { padding: 2rem; }
-.rounded-2xl { border-radius: 1rem; }
-.shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
-.min-h-screen { min-height: 100vh; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 * {
   margin: 0;

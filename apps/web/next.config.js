@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove standalone output for dev mode to ensure CSS processing works
-  // output: 'standalone',
+  // Enable standalone output for Docker production builds
+  output: 'standalone',
   experimental: {
     outputFileTracingRoot: process.cwd(),
   },
@@ -14,7 +14,7 @@ const nextConfig = {
     // Allow production builds to successfully complete even if ESLint errors exist
     ignoreDuringBuilds: false,
   },
-  // Ensure CSS modules and PostCSS work in Docker
+  // Ensure PostCSS and CSS processing works properly in Docker
   webpack: (config, { isServer }) => {
     // Ensure CSS is processed correctly
     if (!isServer) {
