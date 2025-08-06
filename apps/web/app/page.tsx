@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { api, Threat, RefinedThreat, ThreatRefinementResponse } from '@/lib/api'
 import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
+import { DebugPanel } from '@/components/debug/debug-panel'
 
 export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
@@ -243,6 +244,29 @@ export default function HomePage() {
     } catch (error) {
       console.error('Threat refinement failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Threat refinement failed'
+      setThreatRefinementError(errorMessage)
+      setStepStatus('threat_refinement', 'error', errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleQuickRefineThreats = async () => {
+    setLoading(true)
+    setStepStatus('threat_refinement', 'in_progress')
+    setThreatRefinementError(null)
+
+    try {
+      const result = await api.quickRefineThreats()
+      
+      // Update state with refined threats
+      setRefinedThreats(result.refined_threats)
+      setStepStatus('threat_refinement', 'complete')
+      setStepResult('threat_refinement', result)
+      
+    } catch (error) {
+      console.error('Quick threat refinement failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Quick threat refinement failed'
       setThreatRefinementError(errorMessage)
       setStepStatus('threat_refinement', 'error', errorMessage)
     } finally {
@@ -689,14 +713,27 @@ export default function HomePage() {
                     <br />• Enhanced mitigation strategies
                     <br />• Intelligent prioritization
                   </p>
-                  <button
-                    onClick={handleRefineThreats}
-                    disabled={isLoading}
-                    className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
-                  >
-                    <Brain className="w-4 h-4" />
-                    {isLoading ? 'Refining Threats...' : 'Refine with AI'}
-                  </button>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={handleRefineThreats}
+                      disabled={isLoading}
+                      className="px-6 py-3 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
+                    >
+                      <Brain className="w-4 h-4" />
+                      {isLoading ? 'Refining Threats...' : 'Refine with AI'}
+                    </button>
+                    
+                    {process.env.NODE_ENV === 'development' && (
+                      <button
+                        onClick={handleQuickRefineThreats}
+                        disabled={isLoading}
+                        className="px-4 py-2 bg-yellow-600/80 hover:bg-yellow-600 text-yellow-100 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm disabled:opacity-50"
+                        title="Debug mode: instant refinement with sample data"
+                      >
+                        ⚡ Quick Test (Debug)
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -947,6 +984,14 @@ export default function HomePage() {
           {renderStepContent()}
         </div>
       </div>
+      
+      {/* Debug Panel - only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <DebugPanel 
+          setThreats={setThreats}
+          setRefinedThreats={setRefinedThreats}
+        />
+      )}
     </div>
   )
 }

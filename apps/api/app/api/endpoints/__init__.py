@@ -7,5 +7,6 @@ from . import llm
 from . import tasks
 from . import threats
 from . import knowledge_base
+from . import debug
 
-__all__ = ["documents", "pipeline", "websocket", "llm", "tasks", "threats", "knowledge_base"]
+__all__ = ["documents", "pipeline", "websocket", "llm", "tasks", "threats", "knowledge_base", "debug"]

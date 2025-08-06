@@ -237,6 +237,39 @@ async function refineThreats(pipelineId: string): Promise<ThreatRefinementRespon
   return response.json()
 }
 
+// Debug mode functions
+async function quickRefineThreats(): Promise<ThreatRefinementResponse> {
+  const response = await fetch(`${API_URL}/api/debug/quick-refine`, {
+    method: 'POST',
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Debug refinement failed: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function getSampleDFD(): Promise<any> {
+  const response = await fetch(`${API_URL}/api/debug/sample-dfd`)
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get sample DFD: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+async function getSampleThreats(): Promise<any> {
+  const response = await fetch(`${API_URL}/api/debug/sample-threats`)
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get sample threats: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
 // Pipeline endpoints
 async function createPipeline(metadata?: any): Promise<any> {
   const response = await fetch(`${API_URL}/api/pipeline/create`, {
@@ -400,4 +433,9 @@ export const api = {
   
   // Health
   healthCheck,
+  
+  // Debug functions
+  quickRefineThreats,
+  getSampleDFD,
+  getSampleThreats,
 }
