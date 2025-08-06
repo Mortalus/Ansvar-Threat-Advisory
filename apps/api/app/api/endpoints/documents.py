@@ -16,7 +16,11 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 class ExtractDFDRequest(BaseModel):
     pipeline_id: str
-    background: bool = False  # New flag to enable background processing
+    background: bool = False  # Flag to enable background processing
+    use_enhanced_extraction: bool = True  # Enable enhanced extraction with STRIDE expert (recommended)
+    enable_stride_review: bool = True  # Enable STRIDE expert review
+    enable_confidence_scoring: bool = True  # Enable confidence scoring
+    enable_security_validation: bool = True  # Enable security validation checklist
 
 async def extract_text_from_file(file: UploadFile) -> str:
     """Extract text content from uploaded file"""
@@ -158,6 +162,11 @@ async def extract_dfd_from_documents(
     If background=False, executes synchronously and returns results.
     """
     try:
+        logger.info(f"DFD extraction request: use_enhanced={request.use_enhanced_extraction}, "
+                   f"stride_review={request.enable_stride_review}, "
+                   f"confidence_scoring={request.enable_confidence_scoring}, "
+                   f"security_validation={request.enable_security_validation}")
+        
         if request.background:
             # Background execution path
             from app.tasks.pipeline_tasks import execute_pipeline_step
@@ -165,7 +174,12 @@ async def extract_dfd_from_documents(
             task = execute_pipeline_step.delay(
                 pipeline_id=request.pipeline_id,
                 step="dfd_extraction",
-                data={}
+                data={
+                    "use_enhanced_extraction": request.use_enhanced_extraction,
+                    "enable_stride_review": request.enable_stride_review,
+                    "enable_confidence_scoring": request.enable_confidence_scoring,
+                    "enable_security_validation": request.enable_security_validation
+                }
             )
             
             return {
@@ -210,8 +224,13 @@ async def extract_dfd_from_documents(
         
         # The PipelineManager will handle getting document text from database if not provided
         
-        # Execute DFD extraction step
-        data = {}
+        # Execute DFD extraction step with enhancement options
+        data = {
+            "use_enhanced_extraction": request.use_enhanced_extraction,
+            "enable_stride_review": request.enable_stride_review,
+            "enable_confidence_scoring": request.enable_confidence_scoring,
+            "enable_security_validation": request.enable_security_validation
+        }
         if document_text:
             data["document_text"] = document_text
         

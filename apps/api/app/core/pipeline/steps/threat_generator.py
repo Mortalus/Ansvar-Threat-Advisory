@@ -333,7 +333,13 @@ Avoid generic threats - be specific to the component type and context provided."
             all_threats = []
             all_rag_context = []
             
-            for component in high_risk_components:
+            # Process components concurrently for better performance
+            import asyncio
+            
+            logger.info(f"Processing {len(high_risk_components)} high-risk components concurrently...")
+            
+            async def process_component_with_rag(component):
+                """Process a single component with RAG enhancement."""
                 # Get applicable STRIDE categories for this component type
                 applicable_stride = self._get_applicable_stride_categories(component.get('type', ''))
                 max_threats = MAX_THREATS_PER_COMPONENT.get(component.get('type', ''), 3)
@@ -345,8 +351,29 @@ Avoid generic threats - be specific to the component type and context provided."
                 
                 # Step 2: Search RAG for enhancement context (secondary role)
                 query = self._formulate_query(component)
-                logger.info(f"Searching knowledge base for enhancement context: {query}")
+                logger.debug(f"Searching knowledge base for enhancement context: {query}")
                 
+                return component, component_threats, query
+                
+            # Create concurrent tasks for all high-risk components
+            component_tasks = [process_component_with_rag(comp) for comp in high_risk_components]
+            
+            # Execute all component analysis concurrently
+            start_time = asyncio.get_event_loop().time()
+            component_results = await asyncio.gather(*component_tasks, return_exceptions=True)
+            execution_time = asyncio.get_event_loop().time() - start_time
+            
+            logger.info(f"Completed {len(high_risk_components)} components in {execution_time:.1f}s (concurrent)")
+            
+            # Process results from concurrent execution
+            for result in component_results:
+                if isinstance(result, Exception):
+                    logger.error(f"Component processing failed: {result}")
+                    continue
+                    
+                component, component_threats, query = result
+                
+                # RAG enhancement (can be done concurrently per component)
                 try:
                     if self.ingestion_service:
                         relevant_context = await self.ingestion_service.search_similar(
@@ -354,22 +381,17 @@ Avoid generic threats - be specific to the component type and context provided."
                             limit=3  # Reduced limit since RAG is for enhancement, not primary generation
                         )
                         all_rag_context.extend(relevant_context)
+                        
+                        # Step 3: Enhance threats with RAG intelligence (quality enhancement)
+                        component_threats = self._enhance_threats_with_rag_context(
+                            component_threats, relevant_context
+                        )
                     else:
-                        logger.info("RAG search skipped - service not available")
-                        relevant_context = []
+                        logger.debug("RAG search skipped - service not available")
                 except Exception as e:
                     logger.warning(f"RAG search failed for component {component.get('name', 'Unknown')}: {e}")
-                    logger.info("Continuing with LLM-only threat generation")
-                    relevant_context = []
-                
-                # Step 3: Enhance threats with RAG intelligence (quality enhancement)
-                if relevant_context:
-                    component_threats = self._enhance_threats_with_rag_context(
-                        component_threats, relevant_context
-                    )
                 
                 all_threats.extend(component_threats)
-                logger.info(f"Generated {len(component_threats)} threats for component: {component.get('name', 'Unknown')}")
             
             logger.info(f"Pre-quality control: {len(all_threats)} threats generated")
             

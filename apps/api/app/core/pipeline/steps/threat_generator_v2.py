@@ -520,7 +520,14 @@ class ThreatGeneratorV2:
             all_threats = []
             components_analyzed = 0
             
-            for component in components[:15]:  # Focus on top components
+            # Process components concurrently for better performance
+            import asyncio
+            
+            selected_components = components[:15]  # Focus on top components
+            logger.info(f"Processing {len(selected_components)} components concurrently...")
+            
+            async def process_component(component):
+                """Process a single component for threats."""
                 component_type = component.get('type', 'process')
                 
                 # Get applicable STRIDE categories
@@ -530,11 +537,30 @@ class ThreatGeneratorV2:
                 )
                 
                 # Generate component-specific threats
-                component_threats = await self._generate_specific_threats(
+                return await self._generate_specific_threats(
                     component,
                     stride_info,
                     prompt_template
                 )
+            
+            # Create concurrent tasks for all components
+            component_tasks = [process_component(comp) for comp in selected_components]
+            
+            # Execute all component analysis concurrently
+            start_time = asyncio.get_event_loop().time()
+            component_results = await asyncio.gather(*component_tasks, return_exceptions=True)
+            execution_time = asyncio.get_event_loop().time() - start_time
+            
+            logger.info(f"Completed {len(selected_components)} components in {execution_time:.1f}s (concurrent)")
+            
+            # Process results from concurrent execution
+            for component, component_threats in zip(selected_components, component_results):
+                if isinstance(component_threats, Exception):
+                    logger.error(f"Component {component.get('name', 'unknown')} failed: {component_threats}")
+                    continue
+                    
+                if not component_threats:
+                    continue
                 
                 # Step 3: Calculate residual risk for each threat
                 enhanced_threats = []

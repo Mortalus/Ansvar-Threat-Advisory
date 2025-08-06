@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import get_llm_provider
 from app.core.pipeline.dfd_extraction_service import extract_dfd_from_text, validate_dfd_components
+from app.core.pipeline.steps.dfd_extraction_enhanced import extract_dfd_enhanced, EnhancedDFDExtractor
 from app.core.pipeline.steps.threat_generator import ThreatGenerator
 from app.core.pipeline.steps.threat_generator_v2 import ThreatGeneratorV2
 from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
@@ -286,14 +287,14 @@ class PipelineManager:
         service: PipelineService
     ) -> Dict[str, Any]:
         """
-        Handle DFD extraction step using LLM.
+        Handle DFD extraction step with optional quality enhancement.
         
         Args:
             pipeline_id: Pipeline identifier
-            data: Must contain 'document_text' key
+            data: May contain 'document_text', enhancement flags, and configuration
         
         Returns:
-            Extracted DFD components
+            Extracted DFD components with quality report
         """
         # Get document text from data or from pipeline database
         document_text = data.get("document_text")
@@ -309,25 +310,63 @@ class PipelineManager:
         if not self.llm_provider:
             self.llm_provider = await get_llm_provider(step="dfd_extraction")
         
-        logger.info(f"Starting DFD extraction for pipeline {pipeline_id}")
+        # Check for enhanced extraction flags
+        use_enhanced = data.get("use_enhanced_extraction", True)  # Default to enhanced
+        stride_review = data.get("enable_stride_review", True)
+        confidence_scoring = data.get("enable_confidence_scoring", True)
+        security_validation = data.get("enable_security_validation", True)
         
-        # Extract DFD components
-        dfd_components = await extract_dfd_from_text(
-            llm_provider=self.llm_provider,
-            document_text=document_text
-        )
+        logger.info(f"Starting DFD extraction for pipeline {pipeline_id} (enhanced: {use_enhanced})")
+        logger.info(f"DFD extraction data received: {data}")
         
-        # Validate the extraction
-        validation_result = await validate_dfd_components(dfd_components)
-        
-        logger.info(f"DFD extraction complete. Quality score: {validation_result['quality_score']}")
-        
-        # Convert to dict for storage
-        result = {
-            "dfd_components": dfd_components.model_dump(),
-            "validation": validation_result,
-            "extracted_at": datetime.utcnow().isoformat()
-        }
+        if use_enhanced:
+            # Use enhanced extraction with STRIDE expert
+            logger.info("Using enhanced DFD extraction with STRIDE expert review")
+            
+            dfd_components, quality_report = await extract_dfd_enhanced(
+                llm_provider=self.llm_provider,
+                document_text=document_text,
+                enable_stride_review=stride_review,
+                enable_confidence_scoring=confidence_scoring,
+                enable_security_validation=security_validation
+            )
+            
+            # Legacy validation for compatibility
+            validation_result = await validate_dfd_components(dfd_components)
+            
+            logger.info(f"Enhanced DFD extraction complete. "
+                       f"Quality score: {quality_report.get('quality_summary', {}).get('overall_quality_score', 'N/A')}")
+            
+            # Convert to dict for storage
+            result = {
+                "dfd_components": dfd_components.model_dump(),
+                "validation": validation_result,
+                "quality_report": quality_report,
+                "extraction_method": "enhanced",
+                "extracted_at": datetime.utcnow().isoformat()
+            }
+            
+        else:
+            # Use original extraction method
+            logger.info("Using original DFD extraction method")
+            
+            dfd_components = await extract_dfd_from_text(
+                llm_provider=self.llm_provider,
+                document_text=document_text
+            )
+            
+            # Validate the extraction
+            validation_result = await validate_dfd_components(dfd_components)
+            
+            logger.info(f"Basic DFD extraction complete. Quality score: {validation_result['quality_score']}")
+            
+            # Convert to dict for storage
+            result = {
+                "dfd_components": dfd_components.model_dump(),
+                "validation": validation_result,
+                "extraction_method": "basic",
+                "extracted_at": datetime.utcnow().isoformat()
+            }
         
         # Store DFD components in pipeline database
         await service.update_pipeline_data(
@@ -416,11 +455,16 @@ class PipelineManager:
         if not dfd_components:
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
-        # Check which generator version is requested
-        use_v3 = data.get("use_v3_generator", False) or data.get("multi_agent", False)
+        # Check which generator version is requested (V3 is now default)
+        use_v1 = data.get("use_v1_generator", False) or data.get("basic", False)
         use_v2 = data.get("use_v2_generator", False) or data.get("context_aware", False)
+        use_v3 = data.get("use_v3_generator", True) or data.get("multi_agent", True)  # Default to True
         
-        if use_v3:
+        # Priority logic: explicit v1 or v2 override default v3
+        if use_v1 or use_v2:
+            use_v3 = False
+        
+        if use_v3 and not (use_v1 or use_v2):
             logger.info("Using Threat Generator V3 with multi-agent analysis")
             threat_generator = ThreatGeneratorV3()
             
@@ -454,8 +498,9 @@ class PipelineManager:
                 component_data=dfd_components,
                 document_text=document_text
             )
-        else:
-            # Use original RAG-powered threat generator
+        elif use_v1:
+            # Use original RAG-powered threat generator (V1)
+            logger.info("Using Threat Generator V1 (original RAG-powered)")
             threat_generator = ThreatGenerator()
             
             # Get the session from service
@@ -466,6 +511,20 @@ class PipelineManager:
                 db_session=session,
                 pipeline_step_result=None,  # Not needed for this implementation
                 component_data=dfd_components
+            )
+        else:
+            # Fallback to V3 if no specific version requested (should not reach here due to default logic above)
+            logger.info("Fallback: Using Threat Generator V3 with multi-agent analysis")
+            threat_generator = ThreatGeneratorV3()
+            
+            document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
+            session = service.session if hasattr(service, 'session') else await self._get_session()
+            
+            result = await threat_generator.execute(
+                db_session=session,
+                pipeline_step_result=None,
+                component_data=dfd_components,
+                document_text=document_text
             )
         
         # Store threats in pipeline database

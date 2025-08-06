@@ -1008,16 +1008,30 @@ class MultiAgentOrchestrator:
             'summary': {}
         }
         
-        # Run each agent
+        # Run all agents concurrently for faster execution
+        import asyncio
+        
+        logger.info(f"Running {len(self.agents)} agents concurrently...")
+        start_time = asyncio.get_event_loop().time()
+        
+        # Create concurrent tasks for all agents
+        agent_tasks = []
         for agent in self.agents:
-            logger.info(f"Running {agent.name}...")
+            task = agent.analyze(document_text, dfd_components, existing_threats)
+            agent_tasks.append((agent, task))
+        
+        # Execute all agents concurrently
+        try:
+            results = await asyncio.gather(*[task for agent, task in agent_tasks], return_exceptions=True)
             
-            try:
-                agent_threats = await agent.analyze(
-                    document_text,
-                    dfd_components,
-                    existing_threats
-                )
+            # Process results and categorize findings
+            for (agent, _), result in zip(agent_tasks, results):
+                if isinstance(result, Exception):
+                    logger.error(f"{agent.name} failed: {result}")
+                    continue
+                
+                logger.info(f"{agent.name} completed successfully")
+                agent_threats = result
                 
                 # Categorize findings
                 if isinstance(agent, ArchitecturalRiskAgent):
@@ -1029,11 +1043,12 @@ class MultiAgentOrchestrator:
                 
                 all_findings['consolidated_threats'].extend(agent_threats)
                 
-                logger.info(f"{agent.name} found {len(agent_threats)} threats")
+            execution_time = asyncio.get_event_loop().time() - start_time
+            logger.info(f"All agents completed in {execution_time:.1f}s (concurrent execution)")
                 
-            except Exception as e:
-                logger.error(f"Error in {agent.name}: {e}")
-                continue
+        except Exception as e:
+            logger.error(f"Critical error in multi-agent execution: {e}")
+            # Continue with partial results if some agents succeeded
         
         # Generate summary statistics
         all_findings['summary'] = {
