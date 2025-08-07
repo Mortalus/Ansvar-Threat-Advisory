@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.services.prompt_service import PromptService
+from app.core.agents.registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def initialize_default_data():
     """
     Initialize default data for the application.
-    This includes default prompt templates.
+    This includes default prompt templates and agent registry.
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -22,12 +23,35 @@ async def initialize_default_data():
             prompt_service = PromptService(session)
             await prompt_service.initialize_default_prompts()
             
+            # Initialize agent registry
+            await initialize_agent_registry()
+            
             logger.info("Default data initialization completed successfully")
             
     except Exception as e:
         logger.error(f"Error during startup initialization: {str(e)}")
         # Don't raise the exception to prevent startup failure
         # The application should start even if default data initialization fails
+
+
+async def initialize_agent_registry():
+    """Initialize the global agent registry with discovered agents"""
+    try:
+        from app.core.agents import agent_registry
+        
+        # Discover and register available agents
+        discovered_count = agent_registry.discover_agents()
+        logger.info(f"🤖 Agent registry initialized: {discovered_count} agents discovered")
+        
+        # Optionally, save agent metadata to database for the management interface
+        async with AsyncSessionLocal() as session:
+            await agent_registry.update_database_registry(session)
+            
+        logger.info("✅ Agent registry database updated")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize agent registry: {e}")
+        # Don't raise to prevent startup failure
 
 
 def run_startup_tasks():

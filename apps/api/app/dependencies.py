@@ -29,4 +29,6 @@ async def get_pipeline_manager() -> PipelineManager:
     return pipeline_manager_instance
 
 # Re-export database session dependency for convenience
-__all__ = ['get_pipeline_manager', 'get_async_session']
+get_db = get_async_session  # Alias for consistency with agent_management.py
+
+__all__ = ['get_pipeline_manager', 'get_async_session', 'get_db']

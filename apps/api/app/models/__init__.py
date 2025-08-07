@@ -7,6 +7,7 @@ from .prompt import Prompt
 from .knowledge_base import KnowledgeBaseEntry
 from .threat_feedback import ThreatFeedback, ValidationAction
 from .project import Project, ProjectSession, SessionSnapshot
+from .agent_config import AgentConfiguration, AgentPromptVersion, AgentExecutionLog, AgentRegistry
 
 __all__ = [
     "Base",
@@ -23,5 +24,9 @@ __all__ = [
     "ValidationAction",
     "Project",
     "ProjectSession", 
-    "SessionSnapshot"
+    "SessionSnapshot",
+    "AgentConfiguration",
+    "AgentPromptVersion", 
+    "AgentExecutionLog",
+    "AgentRegistry"
 ]
