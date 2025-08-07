@@ -19,8 +19,8 @@ from app.services.prompt_service import PromptService
 from app.core.llm import get_llm_provider
 from app.config import settings
 
-# Import V2 components
-from .threat_generator_v2 import ThreatGeneratorV2, ControlsLibrary
+# Import standalone components  
+from .controls_library import ControlsLibrary, ResidualRiskCalculator, SECURITY_CONTROLS
 
 # Import multi-agent components
 from .analyzer_agents import MultiAgentOrchestrator
@@ -42,8 +42,8 @@ class ThreatGeneratorV3:
     """
     
     def __init__(self):
-        # Initialize V2 generator for context-aware analysis
-        self.v2_generator = ThreatGeneratorV2()
+        # Initialize standalone controls library
+        self.controls_library = ControlsLibrary()
         
         # Initialize multi-agent orchestrator
         self.agent_orchestrator = MultiAgentOrchestrator()
@@ -51,7 +51,7 @@ class ThreatGeneratorV3:
         # Initialize CWE retrieval service
         self.cwe_service = IngestionService()
         
-        logger.info("Threat Generator V3 initialized with multi-agent system and CWE integration")
+        logger.info("🚀 Threat Generator V3 initialized with standalone components and multi-agent system")
     
     async def execute(
         self,
@@ -73,32 +73,53 @@ class ThreatGeneratorV3:
             Comprehensive threat analysis from multiple perspectives
         """
         try:
-            logger.info("Starting Threat Generator V3 with integrated multi-agent analysis")
+            logger.info("🚀 === THREAT GENERATOR V3 EXECUTION START ===")
+            logger.info("🤖 Starting V3 integrated multi-agent threat analysis")
+            
+            # Log input data summary
+            components_count = len(component_data.get('processes', [])) + len(component_data.get('assets', [])) + len(component_data.get('external_entities', []))
+            doc_length = len(document_text) if document_text else 0
+            logger.info(f"📊 Input summary: {components_count} components, {doc_length} chars document text")
             
             # Step 0: Retrieve relevant CWE entries for context enhancement
-            logger.info("Phase 0: CWE knowledge base retrieval")
+            logger.info("🔍 === PHASE 0: CWE KNOWLEDGE BASE RETRIEVAL ===")
             cwe_context = await self._retrieve_cwe_context(component_data)
             
-            # Step 1: Run V2 context-aware threat generation (with CWE context)
-            logger.info("Phase 1: Context-aware threat generation with CWE knowledge")
+            # Step 1: Parse security controls from document
+            logger.info("⚡ === PHASE 1: CONTEXT-AWARE THREAT GENERATION ===")
+            logger.info("🧠 Enhancing components with CWE knowledge...")
             # Enhance component_data with CWE context
             enhanced_component_data = self._enhance_components_with_cwe(component_data, cwe_context)
             
-            v2_results = await self.v2_generator.execute(
+            logger.info("🔒 Parsing document for security controls...")
+            if document_text:
+                detected_controls = self.controls_library.parse_document_for_controls(document_text)
+                logger.info(f"✅ Detected {len(detected_controls)} types of security controls")
+            else:
+                logger.warning("⚠️ No document text provided, proceeding without control detection")
+                detected_controls = {}
+            
+            # Generate core STRIDE threats using LLM
+            logger.info("🎯 Generating STRIDE threats with CWE context...")
+            context_aware_threats = await self._generate_core_threats(
                 db_session=db_session,
-                pipeline_step_result=None,  # We'll handle this ourselves
                 component_data=enhanced_component_data,
                 document_text=document_text
             )
             
-            context_aware_threats = v2_results.get('threats', [])
-            security_controls = v2_results.get('security_controls_detected', [])
+            # Apply residual risk calculation
+            logger.info("⚖️ Calculating residual risk based on detected controls...")
+            risk_calculator = ResidualRiskCalculator(self.controls_library)
+            for threat in context_aware_threats:
+                risk_calculator.calculate_residual_risk(threat)
             
-            logger.info(f"Generated {len(context_aware_threats)} context-aware threats")
+            logger.info(f"✅ Context-aware generation complete: {len(context_aware_threats)} threats with residual risk")
+            logger.info(f"🔒 Security controls detected: {len(detected_controls)}")
             
             # Step 2: Run multi-agent analysis
-            logger.info("Phase 2: Multi-agent specialized analysis")
+            logger.info("👥 === PHASE 2: MULTI-AGENT SPECIALIZED ANALYSIS ===")
             logger.info(f"📄 Document text available: {document_text is not None}")
+            logger.info(f"📝 Document length: {len(document_text) if document_text else 0} characters")
             if document_text:
                 logger.info(f"📝 Document text length: {len(document_text)} characters")
             
@@ -161,9 +182,9 @@ class ThreatGeneratorV3:
                 
                 # Security posture assessment
                 "security_posture": {
-                    "controls_detected": security_controls,
-                    "control_coverage": v2_results.get('control_coverage', {}),
-                    "risk_metrics": v2_results.get('risk_metrics', {}),
+                    "controls_detected": detected_controls,
+                    "control_coverage": self._calculate_control_coverage(detected_controls),
+                    "risk_metrics": self._calculate_risk_metrics(prioritized_threats),
                     "critical_gaps": self._identify_critical_gaps(prioritized_threats)
                 },
                 
@@ -175,8 +196,8 @@ class ThreatGeneratorV3:
                 },
                 
                 # Metadata
-                "components_analyzed": v2_results.get('components_analyzed', 0),
-                "knowledge_sources_used": v2_results.get('knowledge_sources_used', []) + ["CWE"],
+                "components_analyzed": len(self._extract_components(component_data)),
+                "knowledge_sources_used": ["CWE", "STRIDE", "Multi-Agent"],
                 "analysis_version": "3.0",
                 "analysis_methods": ["context_aware", "multi_agent", "holistic", "cwe_enhanced"],
                 
@@ -633,3 +654,218 @@ class ThreatGeneratorV3:
         summary += "\n\nConsider these weaknesses when identifying threats and designing mitigations."
         
         return summary
+
+    async def _generate_core_threats(
+        self,
+        db_session: AsyncSession,
+        component_data: Dict[str, Any],
+        document_text: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate core STRIDE threats using LLM with CWE context.
+        
+        Args:
+            db_session: Database session
+            component_data: Enhanced DFD component data with CWE context
+            document_text: Original document for context
+            
+        Returns:
+            List of generated threats
+        """
+        try:
+            logger.info("🎯 Starting core STRIDE threat generation")
+            
+            # Get prompt template
+            prompt_service = PromptService(db_session)
+            prompt_template = await prompt_service.get_active_prompt("threat_generation")
+            if not prompt_template:
+                await prompt_service.initialize_default_prompts()
+                prompt_template = await prompt_service.get_active_prompt("threat_generation")
+            
+            # Extract components for analysis
+            components = self._extract_components(component_data)
+            data_flows = component_data.get('data_flows', [])
+            
+            logger.info(f"🔍 Analyzing {len(components)} components and {len(data_flows)} data flows")
+            
+            # Generate threats for high-priority components
+            all_threats = []
+            selected_components = components[:15]  # Focus on top components
+            
+            for component in selected_components:
+                logger.debug(f"🎯 Generating threats for component: {component.get('name', 'Unknown')}")
+                
+                # Create component-specific prompt
+                component_prompt = self._create_threat_prompt(
+                    component, data_flows, component_data, prompt_template
+                )
+                
+                # Generate threats using LLM
+                llm_provider = get_llm_provider()
+                response = await llm_provider.generate_text(
+                    prompt=component_prompt,
+                    max_tokens=2000,
+                    temperature=0.3
+                )
+                
+                # Parse threats from response
+                component_threats = self._parse_threat_response(response.content, component)
+                all_threats.extend(component_threats)
+            
+            logger.info(f"✅ Generated {len(all_threats)} core STRIDE threats")
+            return all_threats
+            
+        except Exception as e:
+            logger.error(f"❌ Error in core threat generation: {e}")
+            return []
+    
+    def _extract_components(self, component_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract and prioritize components from DFD data."""
+        components = []
+        
+        # Add processes
+        for process in component_data.get('processes', []):
+            components.append({
+                'name': process.get('name', 'Unknown Process'),
+                'type': 'process',
+                'description': process.get('description', ''),
+                'trust_boundary': process.get('trust_boundary', 'internal')
+            })
+        
+        # Add assets/data stores
+        for asset in component_data.get('assets', []):
+            components.append({
+                'name': asset.get('name', 'Unknown Asset'),
+                'type': 'asset',
+                'description': asset.get('description', ''),
+                'trust_boundary': asset.get('trust_boundary', 'internal')
+            })
+        
+        return components
+    
+    def _create_threat_prompt(
+        self,
+        component: Dict[str, Any],
+        data_flows: List[Dict[str, Any]],
+        component_data: Dict[str, Any],
+        prompt_template: Any
+    ) -> str:
+        """Create a component-specific threat generation prompt."""
+        
+        # Get related data flows
+        component_name = component.get('name', '')
+        related_flows = [
+            flow for flow in data_flows
+            if component_name in flow.get('source', '') or component_name in flow.get('destination', '')
+        ]
+        
+        # Get CWE context if available
+        cwe_context = component_data.get('cwe_context', '')
+        
+        prompt = f"""
+Analyze the following component for STRIDE threats:
+
+Component: {component.get('name', 'Unknown')}
+Type: {component.get('type', 'Unknown')}
+Description: {component.get('description', 'No description available')}
+Trust Boundary: {component.get('trust_boundary', 'Unknown')}
+
+Related Data Flows:
+{chr(10).join([f"- {flow.get('name', 'Unknown')}: {flow.get('source', '')} → {flow.get('destination', '')}" for flow in related_flows[:5]])}
+
+{cwe_context}
+
+Generate 3-5 specific STRIDE threats for this component. For each threat, provide:
+1. Title: Clear, specific threat title
+2. Description: Detailed description of the threat
+3. STRIDE Category: S, T, R, I, D, or E
+4. Impact: Critical/High/Medium/Low
+5. Likelihood: High/Medium/Low
+6. Suggested Mitigation: Specific mitigation steps
+
+Format as JSON array of threat objects.
+"""
+        
+        return prompt
+    
+    def _parse_threat_response(self, response: str, component: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse LLM response into threat objects."""
+        try:
+            # Try to extract JSON from response
+            import json
+            import re
+            
+            # Look for JSON array in response
+            json_match = re.search(r'\[.*\]', response, re.DOTALL)
+            if json_match:
+                threats_data = json.loads(json_match.group())
+                
+                # Normalize threat format
+                threats = []
+                for threat in threats_data:
+                    normalized_threat = {
+                        'Title': threat.get('title', threat.get('Title', 'Unknown Threat')),
+                        'Description': threat.get('description', threat.get('Description', '')),
+                        'stride_category': threat.get('stride_category', threat.get('STRIDE Category', 'Unknown')),
+                        'impact': threat.get('impact', threat.get('Impact', 'Medium')),
+                        'likelihood': threat.get('likelihood', threat.get('Likelihood', 'Medium')),
+                        'Suggested Mitigation': threat.get('suggested_mitigation', threat.get('Suggested Mitigation', '')),
+                        'component': component.get('name', 'Unknown'),
+                        'component_type': component.get('type', 'Unknown')
+                    }
+                    threats.append(normalized_threat)
+                
+                return threats
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to parse threat response as JSON: {e}")
+        
+        # Fallback: create a basic threat if parsing fails
+        return [{
+            'Title': f"Security Analysis Required for {component.get('name', 'Component')}",
+            'Description': f"Manual security analysis needed for {component.get('type', 'component')}",
+            'stride_category': 'Unknown',
+            'impact': 'Medium',
+            'likelihood': 'Medium',
+            'Suggested Mitigation': 'Conduct detailed security review',
+            'component': component.get('name', 'Unknown'),
+            'component_type': component.get('type', 'Unknown')
+        }]
+
+    def _calculate_control_coverage(self, detected_controls: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate security control coverage metrics."""
+        total_controls = len(SECURITY_CONTROLS)
+        detected_count = len(detected_controls)
+        
+        coverage_percentage = (detected_count / total_controls) * 100 if total_controls > 0 else 0
+        
+        return {
+            'total_possible_controls': total_controls,
+            'detected_controls': detected_count,
+            'coverage_percentage': round(coverage_percentage, 1),
+            'missing_controls': [
+                control for control in SECURITY_CONTROLS.keys() 
+                if control not in detected_controls
+            ]
+        }
+    
+    def _calculate_risk_metrics(self, threats: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate risk distribution metrics."""
+        risk_levels = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
+        
+        for threat in threats:
+            risk_level = threat.get('residual_risk_level', threat.get('impact', 'Medium'))
+            if risk_level in risk_levels:
+                risk_levels[risk_level] += 1
+        
+        total_threats = len(threats)
+        
+        return {
+            'risk_distribution': risk_levels,
+            'total_threats': total_threats,
+            'high_risk_percentage': round(
+                ((risk_levels['Critical'] + risk_levels['High']) / total_threats * 100) 
+                if total_threats > 0 else 0, 1
+            ),
+            'controls_effectiveness': f"{len([t for t in threats if t.get('applicable_controls', [])])} of {total_threats} threats mitigated"
+        }

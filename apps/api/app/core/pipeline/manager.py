@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import get_llm_provider
 from app.core.pipeline.dfd_extraction_service import extract_dfd_from_text, validate_dfd_components
 from app.core.pipeline.steps.dfd_extraction_enhanced import extract_dfd_enhanced, EnhancedDFDExtractor
-from app.core.pipeline.steps.threat_generator import ThreatGenerator
-from app.core.pipeline.steps.threat_generator_v2 import ThreatGeneratorV2
 from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
 from app.models.dfd import DFDComponents
 from app.models import Pipeline, PipelineStep as PipelineStepModel, PipelineStatus, StepStatus
@@ -179,55 +177,92 @@ class PipelineManager:
         Returns:
             Result of the step execution
         """
+        logger.info("=" * 80)
+        logger.info(f"🚀 PIPELINE STEP EXECUTION STARTED")
+        logger.info(f"📋 Pipeline ID: {pipeline_id}")
+        logger.info(f"🎯 Step: {step.value}")
+        logger.info(f"📊 Input Data Keys: {list(data.keys()) if data else 'None'}")
+        logger.info("=" * 80)
+        
         session = await self._get_session()
         service = PipelineService(session)
         
         try:
             # Verify pipeline exists
+            logger.info(f"🔍 Verifying pipeline {pipeline_id} exists...")
             pipeline = await service.get_pipeline(pipeline_id)
             if not pipeline:
+                logger.error(f"❌ Pipeline {pipeline_id} not found!")
                 raise ValueError(f"Pipeline {pipeline_id} not found")
             
+            logger.info(f"✅ Pipeline found: {pipeline.name or 'Unnamed'}")
+            logger.info(f"📄 Pipeline status: {pipeline.status.value}")
+            logger.info(f"📝 Document length: {pipeline.text_length or 0} characters")
+            
             # Update step status to in_progress
+            logger.info(f"⏳ Setting step {step.value} to IN_PROGRESS...")
             await service.update_step_status(
                 pipeline_id, step.value, StepStatus.IN_PROGRESS
             )
             
             # Update pipeline status
+            logger.info(f"🔄 Setting pipeline status to IN_PROGRESS...")
             await service.update_pipeline_status(pipeline_id, PipelineStatus.IN_PROGRESS)
             
             try:
+                logger.info(f"🎬 Executing step handler for {step.value}...")
+                
                 # Execute the appropriate step
                 if step == PipelineStep.DOCUMENT_UPLOAD:
+                    logger.info("📄 Starting document upload processing...")
                     result = await self._handle_document_upload(pipeline_id, data, service)
                 
                 elif step == PipelineStep.DFD_EXTRACTION:
+                    logger.info("🔍 Starting DFD extraction processing...")
                     result = await self._handle_dfd_extraction(pipeline_id, data, service)
                 
                 elif step == PipelineStep.DFD_REVIEW:
+                    logger.info("👀 Starting DFD review processing...")
                     result = await self._handle_dfd_review(pipeline_id, data, service)
                 
                 elif step == PipelineStep.THREAT_GENERATION:
+                    logger.info("⚡ Starting threat generation processing...")
                     result = await self._handle_threat_generation(pipeline_id, data, service)
                 
                 elif step == PipelineStep.THREAT_REFINEMENT:
+                    logger.info("⚖️ Starting threat refinement processing...")
                     result = await self._handle_threat_refinement(pipeline_id, data, service)
                 
                 elif step == PipelineStep.ATTACK_PATH_ANALYSIS:
+                    logger.info("🛤️ Starting attack path analysis processing...")
                     result = await self._handle_attack_path_analysis(pipeline_id, data, service)
                 
                 else:
+                    logger.error(f"❌ Unknown step: {step}")
                     raise ValueError(f"Unknown step: {step}")
                 
                 # Update step with success
+                logger.info(f"✅ Step {step.value} completed successfully, updating status...")
                 await service.update_step_status(
                     pipeline_id, step.value, StepStatus.COMPLETED
                 )
                 
-                logger.info(f"Pipeline {pipeline_id}: Step {step} completed successfully")
+                logger.info("=" * 80)
+                logger.info(f"🎉 PIPELINE STEP EXECUTION COMPLETED")
+                logger.info(f"📋 Pipeline ID: {pipeline_id}")
+                logger.info(f"🎯 Step: {step.value}")
+                logger.info(f"📊 Result Keys: {list(result.keys()) if result else 'None'}")
+                logger.info("=" * 80)
                 return result
                 
             except Exception as e:
+                logger.error("=" * 80)
+                logger.error(f"💥 PIPELINE STEP EXECUTION FAILED")
+                logger.error(f"📋 Pipeline ID: {pipeline_id}")
+                logger.error(f"🎯 Step: {step.value}")
+                logger.error(f"❌ Error: {str(e)}")
+                logger.error("=" * 80)
+                
                 # Update step with failure
                 await service.update_step_status(
                     pipeline_id, step.value, StepStatus.FAILED, str(e)
@@ -236,7 +271,7 @@ class PipelineManager:
                 # Update pipeline status
                 await service.update_pipeline_status(pipeline_id, PipelineStatus.FAILED)
                 
-                logger.error(f"Pipeline {pipeline_id}: Step {step} failed: {e}")
+                logger.error(f"💾 Updated pipeline {pipeline_id} status to FAILED")
                 raise
             
         finally:
@@ -250,14 +285,21 @@ class PipelineManager:
         service: PipelineService
     ) -> Dict[str, Any]:
         """Handle document upload step"""
+        logger.info("📄 === DOCUMENT UPLOAD HANDLER ===")
+        
         # This step is mostly handled by the endpoint
         # Just validate and store the document text
         document_text = data.get("document_text", "")
         document_files = data.get("files", [])
         
+        logger.info(f"📝 Document text length: {len(document_text)} characters")
+        logger.info(f"📁 Number of files: {len(document_files) if document_files else 0}")
+        
         if not document_text:
+            logger.error("❌ No document text provided!")
             raise ValueError("No document text provided")
         
+        logger.info("💾 Storing document data in pipeline database...")
         # Store document data in pipeline
         await service.update_pipeline_data(
             pipeline_id,
@@ -274,9 +316,13 @@ class PipelineManager:
             "status": "uploaded"
         }
         
+        logger.info("💾 Storing step result...")
         await service.add_step_result(
             pipeline_id, "document_upload", "upload_info", result
         )
+        
+        logger.info("✅ Document upload completed successfully")
+        logger.info(f"📊 Final result - Length: {len(document_text)}, Files: {len(document_files) if document_files else 0}")
         
         return result
     
@@ -296,19 +342,28 @@ class PipelineManager:
         Returns:
             Extracted DFD components with quality report
         """
+        logger.info("🔍 === DFD EXTRACTION HANDLER ===")
+        
         # Get document text from data or from pipeline database
         document_text = data.get("document_text")
         
         if not document_text:
+            logger.info("📄 No document text in request, fetching from database...")
             # Get document text from database
             pipeline = await service.get_pipeline(pipeline_id)
             if not pipeline or not pipeline.document_text:
+                logger.error("❌ No document text found in pipeline database!")
                 raise ValueError("Document text is required for DFD extraction")
             document_text = pipeline.document_text
+            logger.info(f"✅ Retrieved document text from database: {len(document_text)} characters")
+        else:
+            logger.info(f"📄 Using document text from request: {len(document_text)} characters")
         
         # Get LLM provider
+        logger.info("🤖 Initializing LLM provider...")
         if not self.llm_provider:
             self.llm_provider = await get_llm_provider(step="dfd_extraction")
+        logger.info(f"✅ LLM provider ready: {type(self.llm_provider).__name__}")
         
         # Check for enhanced extraction flags
         use_enhanced = data.get("use_enhanced_extraction", True)  # Default to enhanced
@@ -316,12 +371,16 @@ class PipelineManager:
         confidence_scoring = data.get("enable_confidence_scoring", True)
         security_validation = data.get("enable_security_validation", True)
         
-        logger.info(f"Starting DFD extraction for pipeline {pipeline_id} (enhanced: {use_enhanced})")
-        logger.info(f"DFD extraction data received: {data}")
+        logger.info("🔧 === DFD EXTRACTION CONFIGURATION ===")
+        logger.info(f"🎯 Enhanced extraction: {use_enhanced}")
+        logger.info(f"🛡️ STRIDE review: {stride_review}")
+        logger.info(f"📊 Confidence scoring: {confidence_scoring}")
+        logger.info(f"🔒 Security validation: {security_validation}")
+        logger.info("=" * 50)
         
         if use_enhanced:
             # Use enhanced extraction with STRIDE expert
-            logger.info("Using enhanced DFD extraction with STRIDE expert review")
+            logger.info("🚀 Starting enhanced DFD extraction with STRIDE expert review...")
             
             dfd_components, quality_report = await extract_dfd_enhanced(
                 llm_provider=self.llm_provider,
@@ -331,11 +390,14 @@ class PipelineManager:
                 enable_security_validation=security_validation
             )
             
+            logger.info("🔍 Running legacy validation for compatibility...")
             # Legacy validation for compatibility
             validation_result = await validate_dfd_components(dfd_components)
             
-            logger.info(f"Enhanced DFD extraction complete. "
-                       f"Quality score: {quality_report.get('quality_summary', {}).get('overall_quality_score', 'N/A')}")
+            quality_score = quality_report.get('quality_summary', {}).get('overall_quality_score', 'N/A')
+            logger.info(f"✅ Enhanced DFD extraction complete!")
+            logger.info(f"📊 Quality score: {quality_score}")
+            logger.info(f"🏗️ Components extracted: {len(dfd_components.processes)} processes, {len(dfd_components.assets)} assets, {len(dfd_components.data_flows)} data flows")
             
             # Convert to dict for storage
             result = {
@@ -355,9 +417,14 @@ class PipelineManager:
                 document_text=document_text
             )
             
+            
+            # Get the current step to store token usage
+            step_result = await service.get_pipeline_step(pipeline_id, "dfd_extraction")
+
             # Store token usage in step result
-            step_result.metadata = step_result.metadata or {}
-            step_result.metadata['token_usage'] = token_usage
+            if step_result:
+                step_result.metadata = step_result.metadata or {}
+                step_result.metadata['token_usage'] = token_usage
             
             # Validate the extraction
             validation_result = await validate_dfd_components(dfd_components)
@@ -450,35 +517,35 @@ class PipelineManager:
         service: PipelineService
     ) -> Dict[str, Any]:
         """Handle threat generation step"""
+        logger.info("⚡ === THREAT GENERATION HANDLER ===")
+        
         # Get DFD components from database
+        logger.info("🔍 Fetching DFD components from database...")
         pipeline = await service.get_pipeline(pipeline_id)
         if not pipeline:
+            logger.error(f"❌ Pipeline {pipeline_id} not found!")
             raise ValueError(f"Pipeline {pipeline_id} not found")
         
         dfd_components = pipeline.dfd_components
         if not dfd_components:
+            logger.error("❌ No DFD components found! Run DFD extraction first.")
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
-        # HARDCODED: Always use V3 - user will never use V1/V2
-        use_v1 = False
-        use_v2 = False  
-        use_v3 = True
+        logger.info(f"✅ DFD components loaded: {len(dfd_components.get('processes', []))} processes, {len(dfd_components.get('assets', []))} assets")
         
-        # Log the hardcoded selection
-        logger.info("=== THREAT GENERATOR VERSION SELECTION (HARDCODED) ===")
-        logger.info("🚀 HARDCODED: Always using V3 Multi-Agent Threat Generation")
-        logger.info(f"Request data received but ignored: {data}")
-        logger.info(f"Forced flags: use_v1={use_v1}, use_v2={use_v2}, use_v3={use_v3}")
-        
-        # Always execute V3 since it's hardcoded
+        # Always use V3 - the only threat generator available
         logger.info("🚀 === EXECUTING THREAT GENERATOR V3 (MULTI-AGENT) ===")
         logger.info("🤖 V3 Features: Multi-agent analysis, context-aware risk scoring, executive summaries")
         logger.info("🔧 V3 Agents: Architectural Risk + Business Financial + Compliance Governance")
+        
+        logger.info("🏗️ Initializing ThreatGeneratorV3...")
         threat_generator = ThreatGeneratorV3()
         
         # Get original document text if available for comprehensive analysis
-        document_text = pipeline.document_content if hasattr(pipeline, 'document_content') else None
+        document_text = pipeline.document_text if hasattr(pipeline, 'document_text') else None
+        doc_length = len(document_text) if document_text else 0
         logger.info(f"📄 Document text available for V3 analysis: {document_text is not None}")
+        logger.info(f"📝 Document length: {doc_length} characters")
         
         # Get the session from service
         session = service.session if hasattr(service, 'session') else await self._get_session()
@@ -529,28 +596,39 @@ class PipelineManager:
         service: PipelineService
     ) -> Dict[str, Any]:
         """Handle AI-powered threat refinement step"""
+        logger.info("⚖️ === THREAT REFINEMENT HANDLER ===")
+        
         # Get pipeline to check if threat generation is complete
+        logger.info("🔍 Checking threat generation completion...")
         pipeline = await service.get_pipeline(pipeline_id)
         if not pipeline:
+            logger.error(f"❌ Pipeline {pipeline_id} not found!")
             raise ValueError(f"Pipeline {pipeline_id} not found")
         
         # Check if threat generation step is complete
         threat_step = next((step for step in pipeline.steps if step.step_name == "threat_generation"), None)
         if not threat_step or threat_step.status != StepStatus.COMPLETED:
+            logger.error("❌ Threat generation must be completed before refinement!")
             raise ValueError("Threat generation must be completed before refinement")
+        
+        logger.info("✅ Threat generation step found and completed")
         
         # Get threats from the threat generation step results
         threat_result = next((result for result in threat_step.results 
                             if result.result_type == "threats"), None)
         if not threat_result:
+            logger.error("❌ No threat results found from threat generation step!")
             raise ValueError("No threats found from threat generation step")
         
         threat_data = threat_result.result_data
         if not threat_data or not threat_data.get("threats"):
+            logger.error("❌ No threats found in result data!")
             raise ValueError("No threats found to refine")
         
-        logger.info(f"Starting AI-powered refinement for pipeline {pipeline_id}")
+        threats_count = len(threat_data.get("threats", []))
+        logger.info(f"📊 Found {threats_count} threats ready for refinement")
         
+        logger.info("🤖 Initializing AI-powered threat refiner...")
         # Import and use the optimized AI-powered threat refiner
         from app.core.pipeline.steps.threat_refiner import ThreatRefiner
         
@@ -560,6 +638,7 @@ class PipelineManager:
         session = service.session if hasattr(service, 'session') else await self._get_session()
         
         # Execute threat refinement with AI capabilities
+        logger.info("⚡ Starting threat refinement process...")
         result = await threat_refiner.execute(
             db_session=session,
             pipeline_step_result=None,

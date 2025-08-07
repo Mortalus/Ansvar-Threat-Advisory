@@ -56,6 +56,13 @@ class IngestionService:
     def _initialize_sentence_transformer(self):
         """Initialize SentenceTransformer with proper error handling."""
         try:
+            # Check for internet connection first
+            try:
+                httpx.get("https://huggingface.co", timeout=5)
+            except (httpx.ConnectError, httpx.TimeoutException):
+                logger.warning("No internet connection. Falling back to mock embedder.")
+                return MockEmbedder()
+
             # Set cache directory with proper permissions
             cache_dir = os.getenv('SENTENCE_TRANSFORMERS_HOME', '/tmp/sentence_transformers_cache')
             os.makedirs(cache_dir, exist_ok=True)

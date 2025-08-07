@@ -150,8 +150,9 @@ async def test_threat_generator():
             ]
         }
         
-        # Initialize threat generator
-        threat_generator = ThreatGenerator()
+        # Initialize threat generator V3 (the only available version)
+        from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
+        threat_generator = ThreatGeneratorV3()
         
         try:
             # This will test the full RAG pipeline

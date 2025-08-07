@@ -255,7 +255,7 @@ Be specific and justify each addition with evidence from the document.
         """Review initial DFD and identify missing security components."""
         
         # Prepare the prompt with context
-        initial_dfd_json = initial_dfd.json(indent=2)
+        initial_dfd_json = initial_dfd.model_dump_json(indent=2)
         
         prompt = self.expert_prompt_template.format(
             document_text=document_text,  # No character limit
@@ -661,7 +661,7 @@ class DFDQualityEnhancer:
         """Apply STRIDE expert recommendations to enhance the DFD."""
         
         # Create enhanced copy
-        enhanced_data = initial_dfd.dict()
+        enhanced_data = initial_dfd.model_dump()
         
         # Add missing processes
         for process in expert_findings.get('missing_processes', []):
@@ -687,7 +687,7 @@ class DFDQualityEnhancer:
                     protocol=flow_data.get('protocol', 'HTTPS'),
                     authentication_mechanism=flow_data.get('authentication_mechanism', 'Unknown')
                 )
-                enhanced_data['data_flows'].append(new_flow.dict())
+                enhanced_data['data_flows'].append(new_flow.model_dump())
         
         # Add missing trust boundaries
         for boundary in expert_findings.get('missing_trust_boundaries', []):

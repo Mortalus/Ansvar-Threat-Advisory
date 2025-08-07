@@ -42,7 +42,7 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     # PostgreSQL configuration
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-    async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True)
+    async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 
 # Create session makers
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

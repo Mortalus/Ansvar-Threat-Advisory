@@ -88,25 +88,44 @@ class ThreatRefiner:
                 }
             }
         
-        logger.info(f"Starting optimized threat refinement for {len(threats)} threats")
+        logger.info("🚀 === THREAT REFINER EXECUTION START ===")
+        logger.info(f"📊 Starting optimized threat refinement for {len(threats)} threats")
         
         try:
             # Phase 1: Quick semantic deduplication using string similarity
+            logger.info("🔍 === PHASE 1: SEMANTIC DEDUPLICATION ===")
             deduplicated_threats = self._quick_deduplication(threats)
+            dedup_removed = len(threats) - len(deduplicated_threats)
+            logger.info(f"✅ Deduplication complete: {dedup_removed} duplicates removed, {len(deduplicated_threats)} unique threats")
             
             # Phase 2: Batch risk assessment for top threats
+            logger.info("⚖️ === PHASE 2: BATCH RISK ASSESSMENT ===")
             risk_assessed_threats = await self._batch_risk_assessment(deduplicated_threats)
+            logger.info(f"✅ Risk assessment complete: {len(risk_assessed_threats)} threats assessed")
+
+            # Identify critical threats for business analysis
+            critical_threats = [
+                t for t in risk_assessed_threats 
+                if t.get("risk_score") in ["Critical", "High"]
+            ]
+            logger.info(f"🎯 Identified {len(critical_threats)} critical/high-risk threats for business analysis")
             
             # Phase 3: Business context for all threats
-            business_enhanced_threats = await self._comprehensive_business_enhancement(risk_assessed_threats)
+            logger.info("💼 === PHASE 3: BUSINESS CONTEXT ENHANCEMENT ===")
+            business_enhanced_threats = await self._comprehensive_business_enhancement(risk_assessed_threats, critical_threats)
+            logger.info(f"✅ Business enhancement complete: {len(business_enhanced_threats)} threats enhanced")
             
             # Phase 4: Simple prioritization
+            logger.info("📊 === PHASE 4: PRIORITIZATION & RANKING ===")
             final_threats = self._prioritize_and_rank(business_enhanced_threats)
+            logger.info(f"✅ Prioritization complete: {len(final_threats)} threats ranked")
             
             # Generate statistics
             stats = self._generate_stats(threats, deduplicated_threats, final_threats)
             
-            logger.info(f"Optimized refinement complete: {len(final_threats)} refined threats")
+            logger.info("🎉 === THREAT REFINEMENT COMPLETE ===")
+            logger.info(f"📈 Final results: {len(final_threats)} refined threats")
+            logger.info(f"📊 Risk distribution: {stats.get('risk_distribution', {})}")
             
             return {
                 "refined_threats": final_threats,
@@ -261,7 +280,7 @@ For each threat, provide:
                 threat["risk_assessment_method"] = "fallback"
             return threats
     
-    async def _comprehensive_business_enhancement(self, threats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _comprehensive_business_enhancement(self, threats: List[Dict[str, Any]], critical_threats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add business context to all threats."""
         logger.info("Adding business context to all threats")
         

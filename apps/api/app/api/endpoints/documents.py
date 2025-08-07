@@ -281,10 +281,7 @@ class ReviewDFDRequest(BaseModel):
 
 class GenerateThreatsRequest(BaseModel):
     pipeline_id: str
-    use_v2_generator: bool = False  # Enable V2 with context-aware risk scoring
-    context_aware: bool = False  # Alternative flag for V2
-    use_v3_generator: bool = False  # Enable V3 with multi-agent analysis
-    multi_agent: bool = False  # Alternative flag for V3
+    # V3 is the only threat generator available (multi-agent analysis with context-aware risk scoring)
 
 class RefineThreatRequest(BaseModel):
     pipeline_id: str

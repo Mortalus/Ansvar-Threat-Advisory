@@ -50,30 +50,40 @@ async def extract_dfd_enhanced(
     """
     start_time = datetime.utcnow()
     
-    logger.info("Starting enhanced DFD extraction with quality validation")
+    logger.info("🚀 === ENHANCED DFD EXTRACTION START ===")
+    logger.info("🔍 Starting enhanced DFD extraction with quality validation")
+    logger.info(f"📄 Document length: {len(document_text)} characters")
+    logger.info(f"🛡️ STRIDE review: {enable_stride_review}")
+    logger.info(f"📊 Confidence scoring: {enable_confidence_scoring}")
+    logger.info(f"🔒 Security validation: {enable_security_validation}")
     
     try:
         # Stage 1: Initial DFD Extraction (existing logic)
-        logger.info("Stage 1: Initial DFD extraction")
+        logger.info("⚡ === STAGE 1: INITIAL DFD EXTRACTION ===")
         initial_dfd, token_usage_stage1 = await extract_dfd_from_text(
             llm_provider=llm_provider,
             document_text=document_text
         )
         
-        logger.info(f"Initial extraction: {len(initial_dfd.processes)} processes, "
-                   f"{len(initial_dfd.assets)} assets, {len(initial_dfd.data_flows)} data flows")
-        logger.info(f"Stage 1 token usage: {token_usage_stage1['total_tokens']} tokens, ${token_usage_stage1['total_cost_usd']:.4f}")
+        logger.info(f"✅ Initial extraction complete:")
+        logger.info(f"  🔄 Processes: {len(initial_dfd.processes)}")
+        logger.info(f"  🗄️ Assets: {len(initial_dfd.assets)}")
+        logger.info(f"  🔀 Data flows: {len(initial_dfd.data_flows)}")
+        logger.info(f"  🏰 Trust boundaries: {len(initial_dfd.trust_boundaries)}")
+        logger.info(f"  👥 External entities: {len(initial_dfd.external_entities)}")
+        logger.info(f"🪙 Stage 1 token usage: {token_usage_stage1['total_tokens']} tokens, ${token_usage_stage1['total_cost_usd']:.4f}")
         
         # If enhancements disabled, return initial result
         if not (enable_stride_review or enable_confidence_scoring or enable_security_validation):
-            logger.info("Enhancements disabled, returning initial DFD")
+            logger.info("⚠️ All enhancements disabled, returning initial DFD")
             return initial_dfd, {
                 "enhancement_enabled": False,
                 "extraction_time_seconds": (datetime.utcnow() - start_time).total_seconds()
             }
         
         # Stage 2: Quality Enhancement
-        logger.info("Stage 2: Quality enhancement with STRIDE expert")
+        logger.info("🛡️ === STAGE 2: QUALITY ENHANCEMENT WITH STRIDE EXPERT ===")
+        logger.info("🤖 Initializing DFD quality enhancer...")
         
         enhancer = DFDQualityEnhancer()
         
