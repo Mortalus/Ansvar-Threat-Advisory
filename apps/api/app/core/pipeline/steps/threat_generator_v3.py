@@ -25,6 +25,9 @@ from .threat_generator_v2 import ThreatGeneratorV2, ControlsLibrary
 # Import multi-agent components
 from .analyzer_agents import MultiAgentOrchestrator
 
+# Import CWE retrieval service
+from app.services.ingestion_service import IngestionService
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +48,10 @@ class ThreatGeneratorV3:
         # Initialize multi-agent orchestrator
         self.agent_orchestrator = MultiAgentOrchestrator()
         
-        logger.info("Threat Generator V3 initialized with multi-agent system")
+        # Initialize CWE retrieval service
+        self.cwe_service = IngestionService()
+        
+        logger.info("Threat Generator V3 initialized with multi-agent system and CWE integration")
     
     async def execute(
         self,
@@ -69,12 +75,19 @@ class ThreatGeneratorV3:
         try:
             logger.info("Starting Threat Generator V3 with integrated multi-agent analysis")
             
-            # Step 1: Run V2 context-aware threat generation
-            logger.info("Phase 1: Context-aware threat generation")
+            # Step 0: Retrieve relevant CWE entries for context enhancement
+            logger.info("Phase 0: CWE knowledge base retrieval")
+            cwe_context = await self._retrieve_cwe_context(component_data)
+            
+            # Step 1: Run V2 context-aware threat generation (with CWE context)
+            logger.info("Phase 1: Context-aware threat generation with CWE knowledge")
+            # Enhance component_data with CWE context
+            enhanced_component_data = self._enhance_components_with_cwe(component_data, cwe_context)
+            
             v2_results = await self.v2_generator.execute(
                 db_session=db_session,
                 pipeline_step_result=None,  # We'll handle this ourselves
-                component_data=component_data,
+                component_data=enhanced_component_data,
                 document_text=document_text
             )
             
@@ -90,10 +103,10 @@ class ThreatGeneratorV3:
                 logger.info(f"📝 Document text length: {len(document_text)} characters")
             
             if document_text and len(document_text.strip()) > 50:
-                logger.info("🤖 Starting multi-agent analysis with 3 specialized agents...")
+                logger.info("🤖 Starting multi-agent analysis with 3 specialized agents and CWE context...")
                 agent_results = await self.agent_orchestrator.analyze_system(
                     document_text=document_text,
-                    dfd_components=component_data,
+                    dfd_components=enhanced_component_data,  # Use CWE-enhanced components
                     existing_threats=context_aware_threats,
                     db_session=db_session
                 )
@@ -134,7 +147,7 @@ class ThreatGeneratorV3:
             
             # Prepare comprehensive result
             result = {
-                "threats": prioritized_threats[:50],  # Top 50 threats
+                "threats": prioritized_threats,  # All threats
                 "total_count": len(prioritized_threats),
                 "analysis_summary": executive_summary,
                 
@@ -163,9 +176,16 @@ class ThreatGeneratorV3:
                 
                 # Metadata
                 "components_analyzed": v2_results.get('components_analyzed', 0),
-                "knowledge_sources_used": v2_results.get('knowledge_sources_used', []),
+                "knowledge_sources_used": v2_results.get('knowledge_sources_used', []) + ["CWE"],
                 "analysis_version": "3.0",
-                "analysis_methods": ["context_aware", "multi_agent", "holistic"]
+                "analysis_methods": ["context_aware", "multi_agent", "holistic", "cwe_enhanced"],
+                
+                # CWE integration metadata
+                "cwe_integration": {
+                    "total_cwe_entries_used": enhanced_component_data.get('cwe_metadata', {}).get('total_cwe_entries_used', 0),
+                    "components_with_cwe": enhanced_component_data.get('cwe_metadata', {}).get('components_with_cwe', 0),
+                    "cwe_enabled": enhanced_component_data.get('cwe_metadata', {}).get('cwe_integration_enabled', False)
+                }
             }
             
             # Update pipeline step result if provided
@@ -463,3 +483,153 @@ class ThreatGeneratorV3:
             "frameworks_affected": list(frameworks),
             "most_critical": threats[0].get('Description', '') if threats else None
         }
+    
+    async def _retrieve_cwe_context(self, component_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Retrieve relevant CWE entries for each component using hybrid approach.
+        
+        Args:
+            component_data: DFD component data
+            
+        Returns:
+            Dict mapping component names to relevant CWE entries
+        """
+        cwe_context = {}
+        
+        try:
+            components = component_data.get('components', [])
+            logger.info(f"🔍 Retrieving CWE context for {len(components)} components")
+            
+            for component in components:
+                component_name = component.get('name', 'unknown')
+                component_type = component.get('type', 'default').lower()
+                
+                # Map component type to our CWE mapping keys
+                cwe_component_type = self._map_to_cwe_component_type(component_type)
+                
+                # Create search query from component description
+                description = component.get('description', '')
+                technologies = component.get('technologies', [])
+                search_query = f"{component_name} {description} {' '.join(technologies)}"
+                
+                # Get relevant CWE entries
+                cwe_entries = await self.cwe_service.get_relevant_cwe_entries(
+                    component_type=cwe_component_type,
+                    query=search_query,
+                    limit=3  # Top 3 most relevant CWE entries per component
+                )
+                
+                if cwe_entries:
+                    cwe_context[component_name] = cwe_entries
+                    logger.info(f"🎯 Found {len(cwe_entries)} relevant CWE entries for {component_name}")
+                else:
+                    logger.info(f"⚠️ No CWE entries found for {component_name} (type: {cwe_component_type})")
+            
+            total_cwe_entries = sum(len(entries) for entries in cwe_context.values())
+            logger.info(f"📚 Retrieved {total_cwe_entries} total CWE entries across all components")
+            
+            return cwe_context
+            
+        except Exception as e:
+            logger.warning(f"Error retrieving CWE context: {e}")
+            return {}
+    
+    def _map_to_cwe_component_type(self, component_type: str) -> str:
+        """Map DFD component types to CWE component mapping keys."""
+        type_mapping = {
+            'web_application': 'web_service',
+            'web_server': 'web_service', 
+            'application_server': 'web_service',
+            'api': 'api_gateway',
+            'api_endpoint': 'api_gateway',
+            'rest_api': 'api_gateway',
+            'database': 'database',
+            'data_store': 'data_store',
+            'cache': 'data_store',
+            'file_system': 'data_store',
+            'authentication_service': 'authentication',
+            'auth_server': 'authentication',
+            'identity_provider': 'authentication',
+            'external_service': 'external_entity',
+            'third_party': 'external_entity',
+            'process': 'process',
+            'service': 'process',
+            'boundary': 'trust_boundary',
+            'network': 'trust_boundary'
+        }
+        
+        return type_mapping.get(component_type.lower(), 'default')
+    
+    def _enhance_components_with_cwe(
+        self, 
+        component_data: Dict[str, Any], 
+        cwe_context: Dict[str, List[Dict[str, Any]]]
+    ) -> Dict[str, Any]:
+        """
+        Enhance component data with relevant CWE information for threat generation.
+        
+        Args:
+            component_data: Original component data
+            cwe_context: CWE entries per component
+            
+        Returns:
+            Enhanced component data with CWE context
+        """
+        enhanced_data = component_data.copy()
+        
+        if not cwe_context:
+            logger.info("No CWE context available for enhancement")
+            return enhanced_data
+        
+        # Add CWE context to each component
+        for component in enhanced_data.get('components', []):
+            component_name = component.get('name', '')
+            
+            if component_name in cwe_context:
+                cwe_entries = cwe_context[component_name]
+                
+                # Create CWE context summary
+                cwe_summary = self._create_cwe_summary(cwe_entries)
+                
+                # Add to component data
+                component['cwe_context'] = {
+                    'relevant_weaknesses': cwe_entries,
+                    'context_summary': cwe_summary,
+                    'cwe_count': len(cwe_entries)
+                }
+                
+                logger.info(f"🔗 Enhanced {component_name} with {len(cwe_entries)} CWE entries")
+        
+        # Add global CWE metadata
+        total_cwe_entries = sum(len(entries) for entries in cwe_context.values())
+        enhanced_data['cwe_metadata'] = {
+            'total_cwe_entries_used': total_cwe_entries,
+            'components_with_cwe': len(cwe_context),
+            'cwe_integration_enabled': True
+        }
+        
+        logger.info(f"📋 Component data enhanced with CWE context ({total_cwe_entries} total entries)")
+        
+        return enhanced_data
+    
+    def _create_cwe_summary(self, cwe_entries: List[Dict[str, Any]]) -> str:
+        """Create a concise summary of CWE entries for prompt context."""
+        if not cwe_entries:
+            return "No relevant CWE weaknesses identified."
+        
+        summary_parts = []
+        
+        for entry in cwe_entries:
+            cwe_id = entry.get('cwe_id', 'Unknown')
+            name = entry.get('name', 'Unknown')
+            likelihood = entry.get('likelihood_of_exploit', 'Unknown')
+            
+            # Create concise entry
+            summary_parts.append(f"• {cwe_id}: {name} (Exploit likelihood: {likelihood})")
+        
+        summary = "Relevant CWE weaknesses to consider:\n" + "\n".join(summary_parts)
+        
+        # Add general guidance
+        summary += "\n\nConsider these weaknesses when identifying threats and designing mitigations."
+        
+        return summary

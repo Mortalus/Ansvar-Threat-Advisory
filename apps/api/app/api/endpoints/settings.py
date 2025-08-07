@@ -7,9 +7,10 @@ from pydantic import BaseModel
 import logging
 from datetime import datetime
 
-from app.database import get_db_session
+from app.database import get_async_session
 from app.models.settings import SystemPromptTemplate, SystemPromptTemplateCreate, SystemPromptTemplateUpdate
 from app.services.settings_service import SettingsService
+from app.services.feedback_learning_service import FeedbackLearningService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -95,7 +96,7 @@ async def list_prompt_templates(
     step_name: Optional[str] = None,
     agent_type: Optional[str] = None,
     active_only: bool = True,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ) -> List[PromptTemplateResponse]:
     """List all prompt templates with optional filtering"""
     try:
@@ -127,7 +128,7 @@ async def list_prompt_templates(
 @router.get("/prompts/{template_id}")
 async def get_prompt_template(
     template_id: str,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ) -> PromptTemplateResponse:
     """Get a specific prompt template"""
     try:
@@ -157,7 +158,7 @@ async def get_prompt_template(
 @router.post("/prompts")
 async def create_prompt_template(
     request: PromptTemplateRequest,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ) -> PromptTemplateResponse:
     """Create a new prompt template"""
     try:
@@ -211,7 +212,7 @@ async def create_prompt_template(
 async def update_prompt_template(
     template_id: str,
     request: PromptTemplateUpdate,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ) -> PromptTemplateResponse:
     """Update an existing prompt template"""
     try:
@@ -246,7 +247,7 @@ async def update_prompt_template(
 @router.delete("/prompts/{template_id}")
 async def delete_prompt_template(
     template_id: str,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ):
     """Delete a prompt template"""
     try:
@@ -266,7 +267,7 @@ async def delete_prompt_template(
 
 @router.post("/prompts/initialize-defaults")
 async def initialize_default_prompts(
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ):
     """Initialize default prompt templates for all steps"""
     try:
@@ -316,7 +317,7 @@ async def initialize_default_prompts(
 async def get_active_prompt_for_step(
     step_name: str,
     agent_type: Optional[str] = None,
-    db_session: AsyncSession = Depends(get_db_session)
+    db_session: AsyncSession = Depends(get_async_session)
 ) -> PromptTemplateResponse:
     """Get the active prompt template for a specific step and agent"""
     try:
@@ -369,4 +370,89 @@ async def get_active_prompt_for_step(
         raise
     except Exception as e:
         logger.error(f"Failed to get active prompt for {step_name}/{agent_type}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/learning/statistics")
+async def get_learning_statistics(
+    db_session: AsyncSession = Depends(get_async_session)
+):
+    """Get few-shot learning statistics from user feedback"""
+    try:
+        feedback_service = FeedbackLearningService(db_session)
+        stats = await feedback_service.get_feedback_statistics()
+        
+        return {
+            "learning_status": "enabled" if stats["learning_examples_available"] else "insufficient_data",
+            "feedback_statistics": stats,
+            "message": "Few-shot learning is active" if stats["learning_examples_available"] 
+                      else "Need more user feedback to enable learning"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get learning statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/learning/examples/{step_name}")
+async def get_learning_examples(
+    step_name: str,
+    agent_type: Optional[str] = None,
+    example_type: str = "positive",
+    db_session: AsyncSession = Depends(get_async_session)
+):
+    """Get few-shot learning examples for a specific step/agent"""
+    try:
+        feedback_service = FeedbackLearningService(db_session)
+        examples = await feedback_service.get_few_shot_examples(
+            step_name=step_name,
+            agent_type=agent_type,
+            example_type=example_type
+        )
+        
+        return {
+            "step_name": step_name,
+            "agent_type": agent_type,
+            "example_type": example_type,
+            "examples_count": len(examples),
+            "examples": examples
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get learning examples: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/learning/preview-enhanced-prompt")
+async def preview_enhanced_prompt(
+    request: Dict[str, Any],
+    db_session: AsyncSession = Depends(get_async_session)
+):
+    """Preview how a prompt would be enhanced with few-shot learning"""
+    try:
+        base_prompt = request.get("base_prompt", "")
+        step_name = request.get("step_name", "")
+        agent_type = request.get("agent_type")
+        
+        if not base_prompt or not step_name:
+            raise HTTPException(status_code=400, detail="base_prompt and step_name are required")
+        
+        feedback_service = FeedbackLearningService(db_session)
+        enhanced_prompt = await feedback_service.enhance_prompt_with_examples(
+            base_prompt=base_prompt,
+            step_name=step_name,
+            agent_type=agent_type,
+            include_positive=True,
+            include_negative=request.get("include_negative", False)
+        )
+        
+        return {
+            "original_prompt": base_prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "enhancement_applied": enhanced_prompt != base_prompt,
+            "step_name": step_name,
+            "agent_type": agent_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to preview enhanced prompt: {e}")
         raise HTTPException(status_code=500, detail=str(e))

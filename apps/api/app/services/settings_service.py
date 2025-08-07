@@ -6,6 +6,7 @@ from typing import List, Optional
 import logging
 
 from app.models.settings import SystemPromptTemplate, SystemPromptTemplateCreate, SystemPromptTemplateUpdate
+from app.services.feedback_learning_service import FeedbackLearningService
 
 logger = logging.getLogger(__name__)
 
@@ -165,22 +166,48 @@ class SettingsService:
         self,
         step_name: str,
         agent_type: Optional[str] = None,
-        fallback_prompt: Optional[str] = None
+        fallback_prompt: Optional[str] = None,
+        enable_few_shot_learning: bool = True
     ) -> str:
         """
-        Get the system prompt for a specific step and agent.
-        Returns custom prompt if available, otherwise returns fallback_prompt.
+        Get the system prompt for a specific step and agent with optional few-shot learning.
+        Returns custom prompt enhanced with user feedback examples if available.
         """
+        # Get base prompt
         template = await self.get_active_prompt_template(step_name, agent_type)
         
+        base_prompt = None
         if template:
             logger.debug(f"Using custom prompt for {step_name}/{agent_type}")
-            return template.system_prompt
-        
-        if fallback_prompt:
+            base_prompt = template.system_prompt
+        elif fallback_prompt:
             logger.debug(f"Using fallback prompt for {step_name}/{agent_type}")
-            return fallback_prompt
+            base_prompt = fallback_prompt
+        else:
+            # Default generic prompt as last resort
+            logger.warning(f"No prompt found for {step_name}/{agent_type}, using generic default")
+            base_prompt = "You are a helpful AI assistant specialized in cybersecurity analysis."
         
-        # Default generic prompt as last resort
-        logger.warning(f"No prompt found for {step_name}/{agent_type}, using generic default")
-        return "You are a helpful AI assistant specialized in cybersecurity analysis."
+        # Enhance with few-shot learning if enabled
+        if enable_few_shot_learning:
+            try:
+                feedback_service = FeedbackLearningService(self.db_session)
+                enhanced_prompt = await feedback_service.enhance_prompt_with_examples(
+                    base_prompt=base_prompt,
+                    step_name=step_name,
+                    agent_type=agent_type,
+                    include_positive=True,
+                    include_negative=False  # Start with positive examples only
+                )
+                
+                if enhanced_prompt != base_prompt:
+                    logger.info(f"Enhanced prompt with few-shot examples for {step_name}/{agent_type}")
+                    return enhanced_prompt
+                else:
+                    logger.debug(f"No few-shot examples available for {step_name}/{agent_type}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to enhance prompt with few-shot learning: {e}")
+                # Fall through to return base prompt
+        
+        return base_prompt

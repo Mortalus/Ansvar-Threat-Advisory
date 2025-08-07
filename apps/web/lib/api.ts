@@ -28,6 +28,11 @@ export interface UploadResponse {
   files: FileInfo[]
   text_length: number
   dfd_components?: DFDComponents
+  token_estimate?: {
+    estimated_tokens: number
+    model_basis: string
+    discrete_summary: string
+  }
   status: string
   error?: string
 }

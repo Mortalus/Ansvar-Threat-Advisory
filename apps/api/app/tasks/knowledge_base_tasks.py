@@ -62,6 +62,73 @@ def ingest_knowledge_base(self, url: str, source_name: str) -> Dict[str, Any]:
         raise
 
 
+@celery_app.task(name="tasks.ingest_cwe_database", bind=True)
+def ingest_cwe_database(self, xml_url: str = None, xml_file_path: str = None) -> Dict[str, Any]:
+    """
+    Celery task to ingest CWE (Common Weakness Enumeration) database.
+    
+    Args:
+        xml_url: URL to download CWE XML from (optional, uses default MITRE URL)
+        xml_file_path: Path to local CWE XML file (optional)
+        
+    Returns:
+        Dictionary with ingestion results
+    """
+    try:
+        # Update task state
+        current_task.update_state(
+            state='PROGRESS',
+            meta={'status': 'Starting CWE database ingestion...'}
+        )
+        
+        # Create ingestion service
+        service = IngestionService()
+        
+        # Run the async ingestion in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Update progress
+            current_task.update_state(
+                state='PROGRESS',
+                meta={'status': 'Downloading and parsing CWE data...'}
+            )
+            
+            result = loop.run_until_complete(
+                service.ingest_cwe_from_xml(xml_file_path=xml_file_path, xml_url=xml_url)
+            )
+        finally:
+            loop.close()
+        
+        # Update task state with result
+        if result.get('status') == 'success':
+            current_task.update_state(
+                state='SUCCESS',
+                meta={
+                    **result,
+                    'status': f'Successfully ingested {result.get("entries_processed", 0)} CWE entries'
+                }
+            )
+        else:
+            current_task.update_state(
+                state='FAILURE',
+                meta=result
+            )
+        
+        logger.info(f"CWE ingestion completed: {result}")
+        return result
+        
+    except Exception as e:
+        error_msg = f"Error in CWE ingestion task: {str(e)}"
+        logger.error(error_msg)
+        current_task.update_state(
+            state='FAILURE',
+            meta={'error': error_msg, 'status': 'failed'}
+        )
+        raise
+
+
 @celery_app.task(name="tasks.update_all_knowledge_bases")
 def update_all_knowledge_bases() -> Dict[str, Any]:
     """
@@ -81,6 +148,8 @@ def update_all_knowledge_bases() -> Dict[str, Any]:
     ]
     
     results = []
+    
+    # Process traditional sources
     for source in sources:
         try:
             # Queue individual ingestion tasks
@@ -97,8 +166,23 @@ def update_all_knowledge_bases() -> Dict[str, Any]:
                 "error": str(e)
             })
     
+    # Add CWE database ingestion
+    try:
+        cwe_task = ingest_cwe_database.delay()
+        results.append({
+            "source": "CWE",
+            "task_id": cwe_task.id,
+            "status": "queued"
+        })
+    except Exception as e:
+        results.append({
+            "source": "CWE",
+            "status": "error", 
+            "error": str(e)
+        })
+    
     return {
         "status": "success",
-        "message": f"Queued {len(results)} knowledge base updates",
+        "message": f"Queued {len(results)} knowledge base updates (including CWE)",
         "tasks": results
     }

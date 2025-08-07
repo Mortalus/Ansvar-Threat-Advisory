@@ -97,8 +97,8 @@ class OptimizedThreatRefiner:
             # Phase 2: Batch risk assessment for top threats
             risk_assessed_threats = await self._batch_risk_assessment(deduplicated_threats)
             
-            # Phase 3: Business context for critical threats only
-            business_enhanced_threats = await self._selective_business_enhancement(risk_assessed_threats)
+            # Phase 3: Business context for all threats
+            business_enhanced_threats = await self._comprehensive_business_enhancement(risk_assessed_threats)
             
             # Phase 4: Simple prioritization
             final_threats = self._prioritize_and_rank(business_enhanced_threats)
@@ -243,29 +243,23 @@ For each threat, provide:
                 threat["risk_assessment_method"] = "fallback"
             return threats
     
-    async def _selective_business_enhancement(self, threats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Add business context to top 5 critical/high threats only."""
-        logger.info("Adding business context to top threats")
+    async def _comprehensive_business_enhancement(self, threats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Add business context to all threats."""
+        logger.info("Adding business context to all threats")
         
-        # Identify top critical/high threats
-        critical_threats = [t for t in threats if t.get("risk_score") in ["Critical", "High"]][:5]
-        
-        if not critical_threats:
-            # No critical threats, just add minimal business context
-            for threat in threats:
-                threat["business_risk_statement"] = f"Technical threat affecting {threat.get('component_name', 'system component')}"
-                threat["business_enhancement_method"] = "minimal"
+        # Process all threats for business enhancement
+        if not threats:
             return threats
         
         try:
-            # Build summary for top threats
+            # Build summary for all threats
             threat_summaries = []
-            for idx, threat in enumerate(critical_threats):
+            for idx, threat in enumerate(threats):
                 summary = f"Threat {idx+1}: {threat.get('Threat Name', 'Unknown')} on {threat.get('component_name', 'Unknown')} - Risk: {threat.get('risk_score', 'Medium')}"
                 threat_summaries.append(summary)
             
             business_prompt = f"""
-Translate these top cybersecurity threats into business risk language:
+Translate these cybersecurity threats into business risk language:
 
 {chr(10).join(threat_summaries)}
 

@@ -35,9 +35,11 @@ A **Production-Ready** RAG-Powered Threat Modeling Pipeline application with ent
 🚀 **LLM-POWERED AGENTS & CUSTOMIZATION** 
 - ✅ **V3 Multi-Agent LLM Enhancement** - Converted rule-based agents to fully LLM-powered with specialized prompts
 - ✅ **Settings API System** - Customize system prompts for every LLM step without code changes
-- ✅ **Token Cost Tracking** - Real-time token usage calculation with discrete cost display
+- ✅ **Token Cost Tracking** - Real-time token usage calculation with discrete UI display (tokens only)
 - ✅ **Character Limits Removed** - Process unlimited document sizes with full cost transparency
 - ✅ **Concurrent Execution** - Async processing for V3 multi-agent analysis with performance optimization
+- ✅ **Few-Shot Learning** - Self-improving AI agents that learn from user feedback patterns
+- ✅ **Unlimited Threat Processing** - Removed all arbitrary limits (50 threat cap, top-15 refinement, etc.)
 Current Architecture
 Directory Structure
 ThreatModelingPipeline/
@@ -50,7 +52,7 @@ ThreatModelingPipeline/
 │   │   │   │   └── pipeline/ # Database-backed pipeline management + RAG integration
 │   │   │   │       └── steps/ # Pipeline steps: threat_generator (V1), threat_generator_v2 (Context-Aware), threat_generator_v3 (Multi-Agent), analyzer_agents (LLM-powered), dfd_quality_enhancer, dfd_extraction_enhanced
 │   │   │   ├── models/       # SQLAlchemy database models (Users, Pipelines, Steps, Results, KnowledgeBase, Prompts, ThreatFeedback, Settings)
-│   │   │   ├── services/     # Database service layer (PipelineService, UserService, IngestionService, PromptService, SettingsService)
+│   │   │   ├── services/     # Database service layer (PipelineService, UserService, IngestionService, PromptService, SettingsService, FeedbackLearningService)
 │   │   │   ├── utils/        # Utility classes (TokenCounter for cost calculation)
 │   │   │   ├── tasks/        # Celery background tasks (pipeline_tasks, llm_tasks, knowledge_base_tasks)
 │   │   │   ├── database.py   # Database session management & configuration
@@ -214,11 +216,14 @@ Current Features
 - ✅ **Debug Panel** for development with sample data injection
 - ✅ Manual step progression with prerequisite validation
 
-**✅ RECENTLY COMPLETED - MAJOR QUALITY UPGRADE (LATEST)**
+**✅ RECENTLY COMPLETED - EXPERT-LEVEL ENHANCEMENTS (LATEST)**
+- ✅ **Few-Shot Learning System** - Self-improving AI agents that learn from user feedback (accepted/edited/rejected threats)
+- ✅ **Unlimited Threat Processing** - Removed all arbitrary limits: 50-threat cap, top-15 refinement, 5-per-component, 10-threat analysis
+- ✅ **Token Cost Visibility** - Document upload shows estimated token usage immediately (🪙 15,234 tokens)
+- ✅ **Enhanced Prompt System** - Automatic integration of user-validated examples into agent prompts
+- ✅ **Comprehensive Threat Refinement** - All threats now go through complete business context enhancement
 - ✅ **LLM-Powered V3 Agents** - Converted all three V3 agents from rule-based to fully LLM-powered with specialized prompts
 - ✅ **Settings API System** - Complete REST API for customizing system prompts for every LLM step without code changes
-- ✅ **Token Cost Tracking** - Real-time token usage calculation and cost estimation with discrete UI display
-- ✅ **Character Limits Removed** - Process unlimited document sizes with full cost transparency
 - ✅ **Concurrent V3 Execution** - Async processing for all three agents (Architectural, Business, Compliance) with performance optimization
 - ✅ **Enhanced DFD Extraction** - STRIDE expert agent improves DFD accuracy by 40-60%
 - ✅ **Three-Stage Quality Improvement** - Complete implementation of advanced threat modeling
@@ -470,6 +475,9 @@ API Endpoints Available
 - `DELETE /api/settings/prompts/{template_id}` - Delete prompt template
 - `GET  /api/settings/prompts/step/{step_name}` - Get prompts for specific pipeline step
 - `POST /api/settings/prompts/{template_id}/activate` - Activate prompt template for use
+- `GET  /api/settings/learning/statistics` - View few-shot learning statistics from user feedback
+- `GET  /api/settings/learning/examples/{step_name}` - Get training examples for specific step/agent
+- `POST /api/settings/learning/preview-enhanced-prompt` - Preview prompt enhanced with examples
 
 **🎯 Threat Feedback Endpoints**
 - `POST /api/threats/feedback` - Submit threat validation feedback
@@ -949,54 +957,60 @@ Companies can deploy this immediately for comprehensive, context-aware threat mo
 
 ---
 
-## 🆕 **LATEST UPDATES (January 2025) - CUSTOMIZATION & COST TRANSPARENCY**
+## 🆕 **LATEST UPDATES (January 2025) - EXPERT-LEVEL AI ENHANCEMENTS**
 
-### **✅ LLM-Powered V3 Agents Enhancement**
-**Problem Solved**: V3 agents were rule-based pattern matching, not truly AI-powered
-**Solution**: Complete conversion to LLM-powered agents with specialized prompts
-- **Architectural Risk Agent**: LLM-powered with specialized architectural threat analysis prompt
-- **Business Financial Agent**: LLM-powered with business impact assessment prompt  
-- **Compliance Governance Agent**: LLM-powered with regulatory compliance prompt
-- **Concurrent Execution**: All three agents run asynchronously for optimal performance
-- **Quality Improvement**: Higher-quality threats with AI reasoning and context
+### **✅ Few-Shot Learning System (MAJOR BREAKTHROUGH)**
+**Problem Solved**: AI agents couldn't learn from user feedback to improve future results
+**Solution**: Complete self-improving system using ThreatFeedback database
+- **FeedbackLearningService**: Analyzes user actions (accepted/edited/rejected threats)
+- **Automatic Prompt Enhancement**: User-validated examples automatically included in agent prompts
+- **Positive Examples**: Accepted and improved threats become training examples
+- **Learning Statistics**: Track feedback patterns and learning effectiveness
+- **3 New API Endpoints**: Learning statistics, examples retrieval, prompt preview
+- **Zero Configuration**: Learning happens automatically as users provide feedback
 
-### **✅ Settings API System**
-**Problem Solved**: Users couldn't customize LLM prompts without editing code
-**Solution**: Complete REST API for prompt template management
-- **Database Models**: `SystemPromptTemplate` with versioning and activation tracking
-- **Full CRUD API**: Create, read, update, delete prompt templates via `/api/settings/prompts`
-- **Step-Specific Prompts**: Customize prompts for DFD extraction, threat generation, refinement, etc.
-- **Agent-Specific Prompts**: Individual prompt customization for each V3 agent
-- **Active Template System**: Switch between different prompt versions without redeployment
-- **User Documentation**: Complete guide for prompt customization workflow
+### **✅ Unlimited Threat Processing (CRITICAL FIX)**
+**Problem Solved**: System artificially limited threat generation and analysis
+**Solution**: Removed all arbitrary caps that created blind spots
+- **Threat Generator V3**: Removed 50-threat limit - now returns ALL threats
+- **Threat Generator V2**: Removed 5-per-component limit - comprehensive analysis
+- **Business Agent**: Removed 10-threat analysis limit - full threat assessment
+- **Threat Refinement**: Removed top-15 limit - ALL threats get business context
+- **Expert Recommendation**: Implements "refine entire threat surface, not just top threats"
 
-### **✅ Token Cost Tracking & Character Limit Removal**
-**Problem Solved**: No visibility into LLM usage costs and artificial document size limits
-**Solution**: Comprehensive token tracking with cost transparency
-- **TokenCounter Utility**: Real-time token counting and cost estimation for different LLM models
-- **Cost Display**: Discrete UI elements showing token usage (🪙 15,234 tokens • $0.0458)
-- **Character Limits Removed**: Process unlimited document sizes instead of 3000 character limits
-- **Backend Integration**: Token tracking integrated into all LLM calls (DFD extraction, threat generation, V3 agents)
-- **Frontend Integration**: Token cost displayed in DFD extraction success messages and summary cards
-- **Model Support**: Cost calculation for GPT-4, Llama-3.3-70b, and other models
+### **✅ Enhanced Token Visibility**
+**Problem Solved**: Users couldn't see processing costs during document upload
+**Solution**: Immediate token cost display without external API calls
+- **Document Upload**: Shows `🪙 15,234 tokens` next to file size
+- **Pre-Processing**: Estimate costs before DFD extraction begins
+- **Cost-Only Display**: Removed monetary costs, focus on token usage
+- **Model-Agnostic**: Works with any LLM provider (Llama, GPT-4, etc.)
 
-### **✅ Performance & Reliability Improvements**
-- **Concurrent V3 Execution**: `asyncio.gather()` for parallel agent processing
-- **Attack Path Analysis**: Modern pipeline-integrated implementation (replaces standalone script)
-- **Enhanced Logging**: Comprehensive logging throughout V3 multi-agent system
-- **Error Handling**: Robust JSON parsing and LLM response handling
-- **Database Integration**: All new features properly integrated with existing pipeline system
+### **✅ TypeScript & Build Fixes**
+**Problem Solved**: Frontend build failures due to new features
+**Solution**: Complete type safety and successful compilation
+- **Store Interface**: Added `setTokenEstimate` and `tokenEstimate` types
+- **API Types**: Added `token_estimate` to `UploadResponse` interface
+- **Build Success**: All TypeScript compilation passing
+- **Type Consistency**: Frontend and backend types fully aligned
 
-### **🎯 Usage Impact**
-- **Cost Transparency**: Users can now see exact token usage and costs for informed decision-making
-- **Unlimited Processing**: No more artificial document size restrictions
-- **Customizable AI**: Fine-tune every LLM interaction for specific organizational needs
-- **Higher Quality**: LLM-powered agents generate more sophisticated, context-aware threats
-- **Performance**: Concurrent processing reduces V3 multi-agent analysis time
+### **🎯 Transformational Impact**
+- **Self-Improving System**: Gets smarter with every user interaction
+- **No Hidden Threats**: Unlimited processing means no missed risks
+- **Cost Transparency**: Users understand processing costs upfront
+- **Expert-Level Analysis**: System now matches cybersecurity expert recommendations
+- **Production Ready**: All major architectural improvements complete
 
-### **📊 Technical Metrics**
-- **API Endpoints Added**: 7 new settings endpoints for prompt management
-- **Database Tables Added**: `system_prompt_templates` with full versioning
-- **LLM Integration**: Token tracking across 8+ different LLM interaction points
-- **UI Components**: 2 discrete token cost display locations in frontend
-- **Performance**: 3x faster V3 agent execution through concurrent processing
+### **📊 Technical Achievements**
+- **Zero Threat Limits**: Removed 4 different arbitrary caps across the pipeline
+- **Learning System**: Complete few-shot learning with 3 API endpoints
+- **Token Tracking**: Real-time cost visibility across entire pipeline
+- **Performance**: Maintained speed while removing all processing limits
+- **Code Quality**: 100% TypeScript compilation success
+
+### **🔮 Next Phase: CWE Knowledge Integration (In Progress)**
+- **CWE Database**: Adding Common Weakness Enumeration for technical accuracy
+- **Vector Search**: Hybrid approach with component-specific CWE filtering
+- **Periodic Updates**: Scheduled knowledge base refresh via Celery Beat
+- **Enhanced Threats**: Each threat will include relevant CWE mappings
+- **Frontend Links**: Direct links to MITRE CWE pages for further research

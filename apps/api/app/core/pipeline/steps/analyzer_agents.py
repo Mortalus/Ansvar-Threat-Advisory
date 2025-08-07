@@ -741,7 +741,7 @@ Generate 2-5 HIGH-IMPACT business risks. Focus on threats that would cause signi
             except:
                 pass
         
-        for threat in existing_threats[:10]:  # Analyze top 10 threats
+        for threat in existing_threats:  # Analyze all threats
             threat_category = threat.get('Threat Category', '')
             component = threat.get('component_name', '')
             

@@ -151,4 +151,4 @@ class PipelineTokenTracker:
         if not self.usage_log:
             return "No LLM usage"
         
-        return f"🪙 {self.total_tokens:,} tokens • ${self.total_cost:.4f}"
+        return f"🪙 {self.total_tokens:,} tokens"

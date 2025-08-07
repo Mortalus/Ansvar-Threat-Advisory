@@ -1,11 +1,11 @@
 # 🔍 Threat Generation & Refinement Pipeline: Complete Functional Walkthrough
 
-This document explains exactly how threats are generated and refined in the system, from document upload to final prioritized threats.
+This document explains exactly how threats are generated and refined in the system, from document upload to final prioritized threats. **Updated January 2025** with expert-level enhancements and unlimited processing capabilities.
 
 ## 📋 **High-Level Pipeline Overview**
 
 ```
-📄 Document Upload → 🔍 DFD Extraction → 🎯 Threat Generation (V3) → ⚖️ Threat Refinement → 📊 Final Results
+📄 Document Upload (🪙 Token Tracking) → 🔍 DFD Extraction → 🎯 Threat Generation (V3 Unlimited) → ⚖️ Comprehensive Refinement → 🧠 Few-Shot Learning → 📊 Final Results
 ```
 
 ## 🚀 **Step 1: Document Processing & DFD Extraction**
@@ -14,10 +14,11 @@ This document explains exactly how threats are generated and refined in the syst
 
 ### **Process**:
 
-**1.1 Document Text Extraction**
+**1.1 Document Text Extraction & Token Tracking**
 - Documents converted to plain text
 - Combined into single text blob
-- Limited to 15,000 characters for LLM processing
+- **Token Cost Display**: Shows `🪙 15,234 tokens` immediately after upload
+- **No Character Limits**: Process unlimited document sizes with full cost transparency
 
 **1.2 LLM-Powered DFD Component Extraction**
 The system uses a specialized prompt to extract structured components:
@@ -220,20 +221,20 @@ expertise in cybersecurity compliance frameworks (GDPR, PCI-DSS, HIPAA, SOX, ISO
 - **Architectural Impact Weight**: 10% (bonus for architectural threats)
 - **Financial Exposure Bonus**: 1.5x multiplier if quantified financial impact exists
 
-**Final V3 Output**: Top 50 prioritized threats with comprehensive metadata
+**Final V3 Output**: **ALL** prioritized threats with comprehensive metadata (no limits)
 
-## ⚖️ **Step 3: Threat Refinement**
+## ⚖️ **Step 3: Comprehensive Threat Refinement (EXPERT-LEVEL ENHANCEMENT)**
 
-Takes the raw threats from V3 and applies additional intelligence and business context.
+Takes the raw threats from V3 and applies additional intelligence and business context to **ALL** threats (no limits).
 
-### **Refinement Process**:
+### **Enhanced Refinement Process**:
 
 **Phase 1: Quick Deduplication**
 - Creates signatures from threat name, component, and description 
 - Removes exact duplicates
 
-**Phase 2: Batch Risk Assessment** 
-- Processes top 15 threats through LLM for risk scoring
+**Phase 2: Comprehensive Risk Assessment** 
+- **ENHANCED**: Processes **ALL** threats through LLM for risk scoring (removed 15-threat limit)
 - Uses prompt: *"Assess risk levels for these cybersecurity threats"*
 - Returns JSON array with risk scores, priority ranks, and exploitability ratings
 
@@ -244,19 +245,26 @@ For each threat, provide:
 ]
 ```
 
-**Phase 3: Business Context Enhancement**
-- Takes top 5 critical/high threats
+**Phase 3: Universal Business Context Enhancement**
+- **ENHANCED**: Processes **ALL** threats for business context (removed top-5 limit)
 - Uses LLM to translate technical threats into business language
+- Ensures no "latent risks" are missed due to arbitrary limits
 
 ```
-Translate these top cybersecurity threats into business risk language:
+Translate these cybersecurity threats into business risk language:
 Return JSON array with business statements:
 [
     {"business_risk_statement": "Clear business risk in 1-2 sentences"}
 ]
 ```
 
-**Phase 4: Final Prioritization & Ranking**
+**Phase 4: Few-Shot Learning Enhancement (NEW)**
+- **BREAKTHROUGH FEATURE**: System automatically learns from user feedback
+- User-validated examples (accepted/edited threats) become training data
+- Agents automatically improve with each user interaction
+- No configuration required - learning happens automatically
+
+**Phase 5: Final Prioritization & Ranking**
 - Sorts by risk score  
 - Adds priority rankings (#1, #2, etc.)
 - Assigns implementation priority (Immediate, High, Medium, Low)
@@ -326,13 +334,42 @@ This approach ensures:
 - **Regulatory Compliance**: Audit and compliance gaps identified
 - **Prioritized Action**: Multi-factor scoring for remediation planning
 
-## 🛠️ **Customization**
+## 🎯 **EXPERT-LEVEL ENHANCEMENTS (January 2025)**
 
+### **🚫 No More Arbitrary Limits**
+The system previously had several artificial caps that created blind spots:
+- **FIXED**: V3 Generator 50-threat limit → **UNLIMITED** threat processing
+- **FIXED**: V2 Generator 5-per-component limit → **UNLIMITED** per component
+- **FIXED**: Business Agent 10-threat analysis → **ALL** threats analyzed
+- **FIXED**: Refinement top-15 limit → **ALL** threats refined
+- **FIXED**: Business context top-5 limit → **ALL** threats get business context
+
+### **🧠 Self-Improving AI (Few-Shot Learning)**
+**Revolutionary capability**: The system learns from every user interaction
+- **Accepted Threats**: Become positive training examples for future runs
+- **Edited Threats**: User improvements teach agents better outputs
+- **Rejected Threats**: System learns to avoid similar patterns
+- **Automatic Integration**: Examples automatically included in agent prompts
+- **Zero Configuration**: Learning happens transparently
+
+### **🪙 Cost Transparency**
+- **Document Upload**: Immediate token cost visibility (`🪙 15,234 tokens`)
+- **Pre-Processing**: Users understand costs before DFD extraction
+- **No Hidden Costs**: Transparent token usage throughout pipeline
+
+## 🛠️ **Customization & Learning**
+
+### **Prompt Customization**
 All agent prompts are **fully customizable** via the Settings API without code changes:
 - Industry-specific focus (healthcare, finance, SaaS)
 - Technology-specific analysis (AWS, Azure, containers)
 - Compliance framework specialization (HIPAA, PCI-DSS, GDPR)
 - Custom risk scoring criteria
+
+### **Learning API Endpoints**
+- `GET /api/settings/learning/statistics` - View learning effectiveness
+- `GET /api/settings/learning/examples/{step_name}` - See training examples
+- `POST /api/settings/learning/preview-enhanced-prompt` - Preview enhanced prompts
 
 See `CUSTOM_PROMPTS_GUIDE.md` for detailed customization instructions.
 

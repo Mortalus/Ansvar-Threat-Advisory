@@ -29,6 +29,11 @@ interface StoreState {
   // Document state
   uploadedFiles: File[]
   documentText: string
+  tokenEstimate: {
+    estimated_tokens: number
+    model_basis: string
+    discrete_summary: string
+  } | null
   
   // DFD state
   dfdComponents: DFDComponents | null
@@ -56,6 +61,11 @@ interface StoreState {
   
   setUploadedFiles: (files: File[]) => void
   setDocumentText: (text: string) => void
+  setTokenEstimate: (estimate: {
+    estimated_tokens: number
+    model_basis: string
+    discrete_summary: string
+  } | null) => void
   
   setDfdComponents: (components: DFDComponents | null) => void
   setDfdValidation: (validation: any) => void
@@ -106,6 +116,7 @@ export const useStore = create<StoreState>()(
         
         uploadedFiles: [],
         documentText: '',
+        tokenEstimate: null,
         
         dfdComponents: null,
         dfdValidation: null,
@@ -149,6 +160,8 @@ export const useStore = create<StoreState>()(
         setUploadedFiles: (files) => set({ uploadedFiles: files }),
         
         setDocumentText: (text) => set({ documentText: text }),
+        
+        setTokenEstimate: (estimate) => set({ tokenEstimate: estimate }),
         
         setDfdComponents: (components) => set({ dfdComponents: components }),
         
@@ -207,6 +220,7 @@ export const useStore = create<StoreState>()(
           stepStates: initialStepStates,
           uploadedFiles: [],
           documentText: '',
+          tokenEstimate: null,
           dfdComponents: null,
           dfdValidation: null,
           threats: [],

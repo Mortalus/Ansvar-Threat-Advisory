@@ -21,6 +21,8 @@ export default function HomePage() {
     uploadedFiles,
     setUploadedFiles,
     setDocumentText,
+    tokenEstimate,
+    setTokenEstimate,
     dfdComponents,
     setDfdComponents,
     setDfdValidation,
@@ -144,6 +146,11 @@ export default function HomePage() {
         setDocumentText(`Extracted ${response.text_length} characters`)
       }
 
+      // Store token estimate if available
+      if (response.token_estimate) {
+        setTokenEstimate(response.token_estimate)
+      }
+
       // Mark upload as complete
       setStepStatus('document_upload', 'complete')
       setStepResult('document_upload', { files: response.files })
@@ -163,6 +170,7 @@ export default function HomePage() {
   const removeFile = useCallback(() => {
     setUploadedFiles([])
     setDocumentText('')
+    setTokenEstimate(null)
     setDfdComponents(null)
     setStepStatus('document_upload', 'pending')
     setUploadError(null)
@@ -336,9 +344,14 @@ export default function HomePage() {
                       
                       <div className="flex-1">
                         <p className="font-medium">{file.name}</p>
-                        <p className="text-sm text-gray-400">
-                          {(file.size / 1024).toFixed(2)} KB
-                        </p>
+                        <div className="flex items-center gap-3 text-sm text-gray-400">
+                          <span>{(file.size / 1024).toFixed(2)} KB</span>
+                          {tokenEstimate && (
+                            <span className="text-purple-400">
+                              {tokenEstimate.discrete_summary}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       {!isLoading && (

@@ -659,7 +659,18 @@ class ThreatGeneratorV2:
         categories = stride_info['categories']
         specific_patterns = stride_info['specific_threats']
         
-        # Build focused prompt
+        # Build focused prompt with CWE context if available
+        cwe_context_text = ""
+        if 'cwe_context' in component:
+            cwe_info = component['cwe_context']
+            cwe_context_text = f"""
+
+CWE Knowledge Base Context:
+{cwe_info.get('context_summary', 'No CWE context available')}
+
+When generating threats, consider these known vulnerability patterns and their exploit likelihoods.
+"""
+        
         prompt = f"""
 Analyze this specific component for security threats:
 
@@ -668,11 +679,11 @@ Type: {component_type}
 Description: {component.get('description', 'No description')}
 
 Focus on these STRIDE categories: {', '.join(categories)}
-Consider these specific threat patterns: {', '.join(specific_patterns[:3])}
+Consider these specific threat patterns: {', '.join(specific_patterns[:3])}{cwe_context_text}
 
 Generate 3-5 highly specific, realistic threats. Avoid generic language.
 For each threat, provide:
-- Threat Category (from STRIDE)
+- Threat Category (from STRIDE)  
 - Threat Name (specific attack name)
 - Description (detailed attack scenario for THIS component)
 - Potential Impact (Critical/High/Medium/Low)
@@ -690,7 +701,7 @@ Return as JSON array. Be specific to the component - mention it by name.
             )
             
             threats = self._parse_threats(response.content, component)
-            return threats[:5]  # Limit threats per component
+            return threats  # Return all threats
             
         except Exception as e:
             logger.error(f"Failed to generate threats for {component_name}: {e}")

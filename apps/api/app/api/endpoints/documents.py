@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.core.pipeline.manager import PipelineManager, PipelineStep
 from app.models.dfd import DFDComponents
 from app.dependencies import get_pipeline_manager
+from app.utils.token_counter import TokenCounter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -119,6 +120,14 @@ async def upload_documents(
     # Log extraction success
     logger.info(f"Successfully extracted {len(combined_text)} characters from {len(processed_files)} files")
     
+    # Calculate token estimates for the extracted text
+    estimated_tokens = TokenCounter.estimate_tokens(combined_text)
+    token_cost_estimate = TokenCounter.estimate_cost(
+        input_tokens=estimated_tokens,
+        output_tokens=estimated_tokens // 4,  # Estimate output tokens as 1/4 of input
+        model="llama-3.3-70b-instruct"  # Default model for estimation
+    )
+    
     # Create pipeline but don't automatically run DFD extraction
     try:
         # Create pipeline run
@@ -136,6 +145,11 @@ async def upload_documents(
             "files": processed_files,
             "text_length": len(combined_text),
             "document_upload_result": upload_result,
+            "token_estimate": {
+                "estimated_tokens": estimated_tokens,
+                "model_basis": token_cost_estimate["model"],
+                "discrete_summary": f"🪙 {estimated_tokens:,} tokens"
+            },
             "status": "uploaded"
         }
     
@@ -145,6 +159,11 @@ async def upload_documents(
         return {
             "files": processed_files,
             "text_length": len(combined_text),
+            "token_estimate": {
+                "estimated_tokens": estimated_tokens,
+                "model_basis": token_cost_estimate["model"],
+                "discrete_summary": f"🪙 {estimated_tokens:,} tokens"
+            },
             "status": "text_extracted",
             "pipeline_status": "failed",
             "error": str(e)
