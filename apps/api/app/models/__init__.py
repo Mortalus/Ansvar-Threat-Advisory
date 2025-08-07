@@ -6,6 +6,7 @@ from .user import User
 from .prompt import Prompt
 from .knowledge_base import KnowledgeBaseEntry
 from .threat_feedback import ThreatFeedback, ValidationAction
+from .project import Project, ProjectSession, SessionSnapshot
 
 __all__ = [
     "Base",
@@ -19,5 +20,8 @@ __all__ = [
     "Prompt",
     "KnowledgeBaseEntry",
     "ThreatFeedback",
-    "ValidationAction"
+    "ValidationAction",
+    "Project",
+    "ProjectSession", 
+    "SessionSnapshot"
 ]

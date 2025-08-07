@@ -9,7 +9,7 @@ from datetime import datetime
 from app.config import settings, get_cors_origins
 
 # Import routers
-from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings
+from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects
 
 # Import startup tasks
 from app.startup import run_startup_tasks
@@ -64,6 +64,7 @@ app.include_router(knowledge_base.router)
 app.include_router(websocket.router)
 app.include_router(debug.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(projects.router, prefix="/api")
 
 # Health check endpoint
 @app.get("/health")

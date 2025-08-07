@@ -1,20 +1,33 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { api, Threat, RefinedThreat, ThreatRefinementResponse } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star, Settings } from 'lucide-react'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star, Settings, FolderOpen } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
 import { DebugPanel } from '@/components/debug/debug-panel'
 import { PromptManager } from '@/components/ai-customization/prompt-manager'
 
 export default function HomePage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
   const [isDragging, setIsDragging] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [threats, setThreats] = useState<Threat[]>([])
   const [threatGenerationError, setThreatGenerationError] = useState<string | null>(null)
   const [refinedThreats, setRefinedThreats] = useState<RefinedThreat[]>([])
   const [threatRefinementError, setThreatRefinementError] = useState<string | null>(null)
+  
+  // Session management state
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [sessionInfo, setSessionInfo] = useState<{
+    sessionName?: string;
+    projectName?: string;
+    isLoaded?: boolean;
+  }>({})
   
   const {
     currentStep,
@@ -35,6 +48,53 @@ export default function HomePage() {
     stepStates,
     updateFromPipelineStatus,
   } = useStore()
+
+  // Session loading from URL parameters
+  useEffect(() => {
+    const sessionId = searchParams.get('session')
+    const projectId = searchParams.get('project')
+    
+    if (sessionId && projectId) {
+      loadSession(sessionId, projectId)
+    }
+  }, [searchParams])
+
+  const loadSession = async (sessionId: string, projectId: string) => {
+    try {
+      console.log('📂 Loading session:', sessionId, 'in project:', projectId)
+      setLoading(true)
+      
+      // Load session details
+      const sessionResponse = await fetch(`/api/projects/sessions/${sessionId}`)
+      if (!sessionResponse.ok) {
+        throw new Error('Failed to load session')
+      }
+      
+      const sessionData = await sessionResponse.json()
+      console.log('✅ Session loaded:', sessionData)
+      
+      setCurrentSessionId(sessionId)
+      setCurrentProjectId(projectId)
+      setSessionInfo({
+        sessionName: sessionData.name,
+        projectName: sessionData.project_name,
+        isLoaded: true
+      })
+      
+      // If session has a pipeline, load its state
+      if (sessionData.pipeline_id) {
+        console.log('🔄 Loading pipeline state:', sessionData.pipeline_id)
+        // Load pipeline state and update store
+        // This would integrate with existing pipeline loading logic
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to load session:', error)
+      setUploadError(`Failed to load session: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -966,6 +1026,32 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
+      {/* Session Header */}
+      {sessionInfo.isLoaded && (
+        <div className="bg-blue-900/20 border-b border-blue-500/30 px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <FolderOpen className="h-5 w-5 text-blue-400" />
+              <div className="flex items-center space-x-2 text-sm">
+                <span className="text-blue-300">Project:</span>
+                <span className="font-medium text-white">{sessionInfo.projectName}</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-300">Session:</span>
+                <span className="font-medium text-white">{sessionInfo.sessionName}</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => router.push('/projects')}
+                className="text-sm bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 px-3 py-1 rounded border border-blue-500/30 transition-colors"
+              >
+                View All Sessions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex h-screen">
         {/* Sidebar */}
         <div className="w-80 bg-[#151520] border-r border-[#2a2a4a] p-6">
@@ -977,6 +1063,17 @@ export default function HomePage() {
             </div>
           </div>
           
+          {/* Project Management */}
+          <div className="mb-6">
+            <button
+              onClick={() => router.push('/projects')}
+              className="w-full flex items-center space-x-3 p-3 rounded-lg bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 border border-blue-500/30 transition-colors"
+            >
+              <FolderOpen className="h-5 w-5" />
+              <span className="font-medium">Manage Projects</span>
+            </button>
+          </div>
+
           <div className="space-y-4">
             {[
               { id: 'document_upload', name: 'Document Upload' },

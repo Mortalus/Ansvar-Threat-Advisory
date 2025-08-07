@@ -1,6 +1,6 @@
 # 🌊 Threat Modeling Pipeline: Complete Application Flow
 
-This document provides a comprehensive overview of how the Threat Modeling Pipeline application works, from user interaction to final threat reports.
+This document provides a comprehensive overview of how the Threat Modeling Pipeline application works, from project creation to final threat reports.
 
 ## 📋 **High-Level Architecture Overview**
 
@@ -10,7 +10,57 @@ This document provides a comprehensive overview of how the Threat Modeling Pipel
                             🤖 LLM Providers (Scaleway/Ollama/Azure)
                                     ↕️
                             📚 Knowledge Base (RAG with CWE/MITRE)
+                                    ↕️
+                        📂 Project & Session Management System
 ```
+
+## 🎯 **Session Management Workflow**
+
+### **Phase 0: Project & Session Management**
+```
+Project Creation → Session Management → Pipeline Execution → Session Branching → Results Comparison
+```
+
+**🔍 What Happens:**
+1. **Project Creation**:
+   - User navigates to `/projects` page
+   - Creates new project with name, description, and tags
+   - Project stored in `projects` table
+   - Enables organization of multiple threat modeling sessions
+
+2. **Session Creation**:
+   - User creates new session within a project
+   - Session represents one complete threat modeling analysis
+   - Stored in `project_sessions` table with branching support
+   - Links to pipeline for actual analysis execution
+
+3. **Session Loading**:
+   - User can load existing sessions to continue work
+   - Frontend loads session via `/api/projects/sessions/{id}`
+   - Pipeline state restored if session has associated pipeline
+   - URL parameters: `/?session={sessionId}&project={projectId}`
+
+4. **Session Branching**:
+   - Create variations from existing sessions
+   - Branch from specific pipeline steps (e.g., after DFD extraction)
+   - Independent analysis paths while preserving parent state
+   - Enables "what-if" scenarios and comparative analysis
+
+**📊 Database Schema:**
+- `projects` - Project metadata and organization
+- `project_sessions` - Individual analysis sessions with branching
+- `session_snapshots` - Point-in-time saves for detailed branching
+- `pipelines` - Linked to sessions for actual analysis execution
+
+**🌿 Branching Example:**
+```
+Main Session: "Initial Analysis"
+├── Branch 1: "Alternative Architecture" (branched from DFD Review)
+├── Branch 2: "High Security Variant" (branched from Threat Generation)
+└── Branch 3: "Cost-Optimized" (branched from current state)
+```
+
+---
 
 ## 🔄 **Complete Pipeline Flow**
 
@@ -287,6 +337,107 @@ Pipeline Creation → Step Execution → Result Storage → Status Updates → W
 - **Task Monitoring**: Celery Flower UI
 - **Database Status**: Connection pooling and recycling
 - **LLM Provider**: Connection validation and retry logic
+
+---
+
+## 📝 **Enhanced Logging System**
+
+### **Comprehensive Session Logging**
+The application now includes detailed logging throughout all session operations:
+
+**🔍 Session Operations:**
+```
+🆕 Creating new project: 'E-commerce Security Analysis'
+📝 Project name: 'E-commerce Security Analysis'
+📄 Description: 245 chars
+🏷️ Tags: ['web-app', 'payment', 'pci-dss']
+✅ Project created successfully: c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+
+🚀 Creating new session: 'Initial Analysis' in project c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+✅ Session created successfully: a1b2c3d4-5e6f-7890-abcd-ef1234567890 (main_branch: True)
+
+📂 Loading session: a1b2c3d4-5e6f-7890-abcd-ef1234567890
+✅ Session found: 'Initial Analysis' in project 'E-commerce Security Analysis'
+
+🌿 Creating branch 'Alternative Architecture' from snapshot 12345678-90ab-cdef-1234-567890abcdef
+✅ Branch created successfully: b2c3d4e5-6f78-9012-bcde-f12345678901
+```
+
+**🎯 Pipeline Step Logging:**
+```
+🚀 PIPELINE STEP EXECUTION STARTED
+📋 Pipeline ID: c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+🎯 Step: threat_generation
+📊 Input Data Keys: ['document_text', 'dfd_components']
+✅ Pipeline found: E-commerce Security Analysis
+📄 Pipeline status: IN_PROGRESS
+
+⚡ === EXECUTING THREAT GENERATOR V3 (MULTI-AGENT) ===
+🤖 V3 Features: Multi-agent analysis, context-aware risk scoring, executive summaries
+🔧 V3 Agents: Architectural Risk + Business Financial + Compliance Governance
+
+🔍 === PHASE 0: CWE KNOWLEDGE BASE RETRIEVAL ===
+⚡ === PHASE 1: CONTEXT-AWARE THREAT GENERATION ===
+🔒 Parsing document for security controls...
+✅ Detected 5 types of security controls
+🎯 Generating STRIDE threats with CWE context...
+⚖️ Calculating residual risk based on detected controls...
+✅ Context-aware generation complete: 27 threats with residual risk
+
+👥 === PHASE 2: MULTI-AGENT SPECIALIZED ANALYSIS ===
+🤖 Starting multi-agent analysis with 3 specialized agents and CWE context...
+🏗️ Architectural Risk Agent: Analyzing system architecture vulnerabilities...
+💼 Business Risk Agent: Assessing financial and operational impacts...
+⚖️ Compliance Agent: Evaluating regulatory compliance requirements...
+✅ Multi-agent analysis complete
+
+📊 === THREAT GENERATION SUMMARY ===
+🎯 Total threats generated: 42
+🔧 Components analyzed: 8
+🔍 Knowledge sources used: ['CWE', 'STRIDE', 'Multi-Agent']
+🤖 V3 Threat breakdown - Technical: 27, Architectural: 8, Business: 4, Compliance: 3
+=== THREAT GENERATION COMPLETE ===
+```
+
+**📂 Session Management API Logging:**
+```
+🚀 === CREATE PROJECT API ===
+📝 Project name: 'E-commerce Platform Security Analysis'
+📄 Description: 245 chars
+🏷️ Tags: ['web-app', 'payment', 'pci-dss']
+✅ Project created successfully: c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+
+📋 === LIST PROJECTS API ===
+🔍 Search: 'ecommerce', Limit: 50, Offset: 0
+✅ Retrieved 3 projects
+
+🔍 === GET PROJECT DETAILS API ===
+📋 Project ID: c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+✅ Project details retrieved: 5 sessions
+
+🚀 === CREATE SESSION API ===
+📋 Project ID: c6f81b12-43e9-473b-a76d-f3ecffba5ef5
+📝 Session name: 'Initial Security Analysis'
+✅ Session created successfully: a1b2c3d4-5e6f-7890-abcd-ef1234567890
+
+🌿 === BRANCH SESSION API ===
+🔗 Parent session: a1b2c3d4-5e6f-7890-abcd-ef1234567890
+📝 Branch name: 'Alternative Architecture'
+📍 Branch point: dfd_review
+✅ Branch created successfully: b2c3d4e5-6f78-9012-bcde-f12345678901
+
+📂 === LOAD SESSION API ===
+📋 Session ID: a1b2c3d4-5e6f-7890-abcd-ef1234567890
+🌿 Create branch: false
+✅ Session loaded successfully
+```
+
+This comprehensive logging provides full visibility into:
+- **Session Lifecycle**: Creation, loading, branching, and completion
+- **Pipeline Execution**: Detailed step-by-step progress with timing
+- **API Operations**: Request/response logging with performance metrics
+- **Error Handling**: Clear error messages with context and troubleshooting info
+- **User Actions**: Complete audit trail of user interactions
 
 ---
 
