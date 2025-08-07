@@ -580,6 +580,216 @@ async function initializeDefaultPrompts() {
   return response.json()
 }
 
+// Agent Management API Types
+export interface AgentInfo {
+  name: string
+  version: string
+  description: string
+  category: string
+  priority: number
+  requires_document: boolean
+  requires_components: boolean
+  estimated_tokens: number
+  enabled_by_default: boolean
+  legacy_equivalent?: string
+  current_config?: any
+  class_name: string
+}
+
+export interface AgentConfiguration {
+  agent_name: string
+  enabled: boolean
+  priority: number
+  custom_prompt?: string
+  max_tokens: number
+  temperature: number
+  rate_limit_per_hour?: number
+  concurrent_limit?: number
+  total_executions?: number
+  successful_executions?: number
+  total_threats_found?: number
+  total_tokens_used?: number
+  average_execution_time?: number
+  average_confidence_score?: number
+  last_executed?: string
+  last_modified?: string
+}
+
+export interface AgentExecutionLog {
+  agent_name: string
+  execution_id: string
+  executed_at: string
+  execution_time: number
+  success: boolean
+  error_message?: string
+  threats_found?: number
+  tokens_used?: number
+  average_confidence?: number
+}
+
+export interface AgentTestResult {
+  agent_name: string
+  success: boolean
+  execution_time: number
+  threats_generated: number
+  tokens_used?: number
+  sample_threats?: any[]
+  error_message?: string
+}
+
+// Agent Management API Functions
+async function getAvailableAgents(): Promise<AgentInfo[]> {
+  const response = await fetch(`${API_URL}/api/agents/list`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get available agents' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  const data = await response.json()
+  return data.agents || []
+}
+
+async function getAgentConfiguration(agentName: string): Promise<AgentConfiguration> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/config`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get agent configuration' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function updateAgentConfiguration(
+  agentName: string, 
+  config: Partial<AgentConfiguration>
+): Promise<AgentConfiguration> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to update agent configuration' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function testAgent(
+  agentName: string, 
+  testData: {
+    sample_document?: string
+    sample_components?: any
+    use_mock_llm?: boolean
+    custom_prompt?: string
+  } = {}
+): Promise<AgentTestResult> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(testData)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Agent test failed' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function getAgentExecutionHistory(
+  agentName: string, 
+  limit: number = 50
+): Promise<AgentExecutionLog[]> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/history?limit=${limit}`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get execution history' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function getAgentPerformanceStats(agentName: string): Promise<{
+  total_executions: number
+  successful_executions: number
+  success_rate: number
+  average_execution_time: number
+  average_threats_per_execution: number
+  average_confidence_score: number
+  total_tokens_used: number
+  last_30_days: {
+    executions: number
+    success_rate: number
+  }
+}> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/performance`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get performance stats' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function reloadAgentConfiguration(agentName: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_URL}/api/agents/${agentName}/reload`, {
+    method: 'POST'
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to reload agent' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+// Task Management API Functions for Async Operations
+async function executeStepInBackground(
+  pipelineId: string, 
+  stepName: string, 
+  data: any = {}
+): Promise<{ task_id: string; status: string }> {
+  const response = await fetch(`${API_URL}/api/tasks/execute-step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pipeline_id: pipelineId,
+      step_name: stepName,
+      ...data
+    })
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to start background task' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function getTaskStatus(taskId: string): Promise<{
+  task_id: string
+  status: string
+  result?: any
+  error?: string
+  progress?: number
+}> {
+  const response = await fetch(`${API_URL}/api/tasks/status/${taskId}`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get task status' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function listActiveTasks(): Promise<Array<{
+  task_id: string
+  name: string
+  status: string
+  started_at: string
+  pipeline_id?: string
+}>> {
+  const response = await fetch(`${API_URL}/api/tasks/list`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to list tasks' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 // Export API object with all methods
 export const api = {
   // Document methods
@@ -617,6 +827,20 @@ export const api = {
   updatePromptTemplate,
   deletePromptTemplate,
   initializeDefaultPrompts,
+  
+  // Agent Management
+  getAvailableAgents,
+  getAgentConfiguration,
+  updateAgentConfiguration,
+  testAgent,
+  getAgentExecutionHistory,
+  getAgentPerformanceStats,
+  reloadAgentConfiguration,
+  
+  // Async Task Management
+  executeStepInBackground,
+  getTaskStatus,
+  listActiveTasks,
   
   // Debug functions
   quickRefineThreats,
