@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 class PipelineStep(str, Enum):
     """Pipeline step identifiers"""
     DOCUMENT_UPLOAD = "document_upload"
+    DATA_EXTRACTION = "data_extraction"
+    DATA_EXTRACTION_REVIEW = "data_extraction_review"
     DFD_EXTRACTION = "dfd_extraction"
     DFD_REVIEW = "dfd_review"
     THREAT_GENERATION = "threat_generation"
@@ -217,6 +219,14 @@ class PipelineManager:
                     logger.info("📄 Starting document upload processing...")
                     result = await self._handle_document_upload(pipeline_id, data, service)
                 
+                elif step == PipelineStep.DATA_EXTRACTION:
+                    logger.info("🛡️ Starting STRIDE data extraction processing...")
+                    result = await self._handle_data_extraction(pipeline_id, data, service)
+                
+                elif step == PipelineStep.DATA_EXTRACTION_REVIEW:
+                    logger.info("📝 Starting data extraction review processing...")
+                    result = await self._handle_data_extraction_review(pipeline_id, data, service)
+                
                 elif step == PipelineStep.DFD_EXTRACTION:
                     logger.info("🔍 Starting DFD extraction processing...")
                     result = await self._handle_dfd_extraction(pipeline_id, data, service)
@@ -326,6 +336,132 @@ class PipelineManager:
         
         return result
     
+    async def _handle_data_extraction(
+        self,
+        pipeline_id: str,
+        data: Dict[str, Any],
+        service: PipelineService
+    ) -> Dict[str, Any]:
+        """Handle STRIDE-focused data extraction step"""
+        logger.info("🛡️ === STRIDE DATA EXTRACTION HANDLER ===")
+        
+        # Get document text from data or from pipeline database
+        document_text = data.get("document_text")
+        
+        if not document_text:
+            logger.info("📄 No document text in request, fetching from database...")
+            pipeline = await service.get_pipeline(pipeline_id)
+            if not pipeline or not pipeline.document_text:
+                logger.error("❌ No document text found in pipeline database!")
+                raise ValueError("Document text is required for data extraction")
+            document_text = pipeline.document_text
+            logger.info(f"✅ Retrieved document text from database: {len(document_text)} characters")
+        else:
+            logger.info(f"📄 Using document text from request: {len(document_text)} characters")
+        
+        # Get LLM provider
+        logger.info("🤖 Initializing LLM provider...")
+        if not self.llm_provider:
+            self.llm_provider = await get_llm_provider(step="data_extraction")
+        logger.info(f"✅ LLM provider ready: {type(self.llm_provider).__name__}")
+        
+        # Configuration options
+        enable_quality_validation = data.get("enable_quality_validation", True)
+        
+        logger.info("🔧 === STRIDE DATA EXTRACTION CONFIGURATION ===")
+        logger.info(f"✅ Quality validation: {enable_quality_validation}")
+        logger.info("=" * 50)
+        
+        # Import and use STRIDE data extractor
+        from app.core.pipeline.steps.stride_data_extractor import extract_stride_security_data
+        
+        logger.info("🚀 Starting STRIDE-focused data extraction...")
+        extracted_data, extraction_metadata = await extract_stride_security_data(
+            llm_provider=self.llm_provider,
+            document_text=document_text,
+            enable_quality_validation=enable_quality_validation
+        )
+        
+        logger.info("✅ STRIDE data extraction completed!")
+        logger.info(f"📊 Extracted: {len(extracted_data.security_assets)} assets, "
+                   f"{len(extracted_data.security_data_flows)} data flows, "
+                   f"{len(extracted_data.trust_zones)} trust zones")
+        
+        # Prepare result
+        result = {
+            "extracted_security_data": extracted_data.model_dump(),
+            "extraction_metadata": extraction_metadata,
+            "extraction_method": "stride_focused",
+            "quality_score": extracted_data.quality_score,
+            "completeness_indicators": extracted_data.completeness_indicators,
+            "extracted_at": extracted_data.extracted_at
+        }
+        
+        # Store extracted data in pipeline database
+        await service.update_pipeline_data(
+            pipeline_id,
+            extracted_security_data=extracted_data.model_dump(),
+            extraction_metadata=extraction_metadata
+        )
+        
+        # Store step result
+        await service.add_step_result(
+            pipeline_id, "data_extraction", "extracted_security_data", result
+        )
+        
+        logger.info(f"💾 Stored STRIDE data extraction results for pipeline {pipeline_id}")
+        return result
+    
+    async def _handle_data_extraction_review(
+        self,
+        pipeline_id: str,
+        data: Dict[str, Any],
+        service: PipelineService
+    ) -> Dict[str, Any]:
+        """Handle data extraction review step - allows manual editing of extracted security data"""
+        logger.info("📝 === DATA EXTRACTION REVIEW HANDLER ===")
+        
+        # Get current extracted data from database
+        pipeline = await service.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise ValueError(f"Pipeline {pipeline_id} not found")
+        
+        current_extracted_data = getattr(pipeline, 'extracted_security_data', None)
+        if not current_extracted_data:
+            raise ValueError("Extracted security data not found. Run data extraction first.")
+        
+        # Get updated extracted data from request
+        updated_data = data.get("extracted_security_data")
+        if not updated_data:
+            raise ValueError("No updated extracted security data provided")
+        
+        # Validate the updated data structure
+        try:
+            from app.core.pipeline.steps.stride_data_extractor import ExtractedSecurityData
+            validated_data = ExtractedSecurityData(**updated_data)
+        except Exception as e:
+            raise ValueError(f"Invalid extracted security data format: {e}")
+        
+        # Store the updated data in database
+        await service.update_pipeline_data(
+            pipeline_id,
+            extracted_security_data=validated_data.model_dump()
+        )
+        
+        result = {
+            "extracted_security_data": validated_data.model_dump(),
+            "reviewed_at": datetime.utcnow().isoformat(),
+            "status": "reviewed"
+        }
+        
+        # Store step result
+        await service.add_step_result(
+            pipeline_id, "data_extraction_review", "extracted_security_data_review", result
+        )
+        
+        logger.info(f"✅ Data extraction review completed for pipeline {pipeline_id}")
+        return result
+    
     async def _handle_dfd_extraction(
         self,
         pipeline_id: str,
@@ -344,17 +480,24 @@ class PipelineManager:
         """
         logger.info("🔍 === DFD EXTRACTION HANDLER ===")
         
-        # Get document text from data or from pipeline database
+        # Get document text and optionally extracted security data
         document_text = data.get("document_text")
+        extracted_security_data = data.get("extracted_security_data")
         
         if not document_text:
             logger.info("📄 No document text in request, fetching from database...")
-            # Get document text from database
+            # Get document text and extracted security data from database
             pipeline = await service.get_pipeline(pipeline_id)
             if not pipeline or not pipeline.document_text:
                 logger.error("❌ No document text found in pipeline database!")
                 raise ValueError("Document text is required for DFD extraction")
             document_text = pipeline.document_text
+            
+            # Check for extracted security data
+            extracted_security_data = getattr(pipeline, 'extracted_security_data', None)
+            if extracted_security_data:
+                logger.info("🛡️ Found extracted security data from DATA_EXTRACTION step")
+            
             logger.info(f"✅ Retrieved document text from database: {len(document_text)} characters")
         else:
             logger.info(f"📄 Using document text from request: {len(document_text)} characters")

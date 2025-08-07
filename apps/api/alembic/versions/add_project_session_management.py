@@ -52,7 +52,7 @@ def upgrade():
         sa.Column('total_threats_found', sa.Integer(), nullable=True),
         sa.Column('risk_level_summary', sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(['parent_session_id'], ['project_sessions.id'], ),
-        sa.ForeignKeyConstraint(['pipeline_id'], ['pipelines.id'], ),
+        sa.ForeignKeyConstraint(['pipeline_id'], ['pipelines.pipeline_id'], ),
         sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
         sa.PrimaryKeyConstraint('id')
     )

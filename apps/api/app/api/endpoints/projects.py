@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from app.services.project_service import ProjectService
-from app.dependencies import get_async_session
+from app.database import get_async_session
 from app.models.project import Project, ProjectSession
 from sqlalchemy.ext.asyncio import AsyncSession
 

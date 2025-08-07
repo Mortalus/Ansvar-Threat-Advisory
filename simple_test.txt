@@ -1,0 +1,12 @@
+Web Application Security
+
+This is a simple web application with:
+- Frontend: React app
+- Backend: Node.js API  
+- Database: MongoDB
+- Authentication: JWT tokens
+
+Security concerns:
+- User input validation
+- SQL injection prevention
+- XSS protection

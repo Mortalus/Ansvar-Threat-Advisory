@@ -619,6 +619,38 @@ Generate 2-5 HIGH-IMPACT business risks. Focus on threats that would cause signi
             # Fallback to simplified analysis
             return self._fallback_business_analysis(dfd_components)
     
+    def _prepare_components_summary(self, dfd_components: Dict[str, Any]) -> str:
+        """Prepare a summary of DFD components for business analysis."""
+        summary = []
+        
+        if dfd_components.get('processes'):
+            summary.append(f"Processes: {', '.join(dfd_components['processes'])}")
+        if dfd_components.get('assets'):
+            summary.append(f"Assets: {', '.join(dfd_components['assets'])}")
+        if dfd_components.get('external_entities'):
+            summary.append(f"External Entities: {', '.join(dfd_components['external_entities'])}")
+        if dfd_components.get('trust_boundaries'):
+            summary.append(f"Trust Boundaries: {', '.join(dfd_components['trust_boundaries'])}")
+            
+        return "; ".join(summary) if summary else "No components identified"
+    
+    def _prepare_existing_threats_summary(self, existing_threats: List[Dict[str, Any]]) -> str:
+        """Prepare a summary of existing threats."""
+        if not existing_threats:
+            return "No existing threats identified"
+        
+        summary = []
+        for threat in existing_threats[:5]:  # Limit to first 5 threats
+            threat_name = threat.get('Title', threat.get('Threat Name', 'Unknown'))
+            impact = threat.get('impact', threat.get('Potential Impact', 'Unknown'))
+            summary.append(f"- {threat_name} (Impact: {impact})")
+        
+        more_count = len(existing_threats) - 5
+        if more_count > 0:
+            summary.append(f"... and {more_count} more threats")
+            
+        return "\n".join(summary)
+    
     def _fallback_business_analysis(self, dfd_components: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Simple fallback if LLM fails."""
         logger.info("🔄 Using fallback business analysis")
@@ -1472,8 +1504,8 @@ class MultiAgentOrchestrator:
                     logger.error(f"{agent.name} failed: {result}")
                     continue
                 
-                logger.info(f"✅ {agent.name} completed successfully - Found {len(agent_threats)} threats")
                 agent_threats = result
+                logger.info(f"✅ {agent.name} completed successfully - Found {len(agent_threats)} threats")
                 
                 # Categorize findings
                 if isinstance(agent, ArchitecturalRiskAgent):

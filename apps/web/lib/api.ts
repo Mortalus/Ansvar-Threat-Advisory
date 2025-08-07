@@ -167,6 +167,39 @@ async function getSampleDFD(): Promise<DFDComponents> {
   return response.json()
 }
 
+async function extractStrideData(pipelineId: string, options: {
+  enable_quality_validation?: boolean
+} = {}): Promise<{
+  pipeline_id: string
+  extracted_security_data: any
+  extraction_metadata: any
+  quality_score?: number
+  completeness_indicators?: any
+  status: string
+}> {
+  console.log('Extracting STRIDE data for pipeline:', pipelineId)
+  
+  const response = await fetch(`${API_URL}/api/documents/extract-data`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      pipeline_id: pipelineId,
+      enable_quality_validation: options.enable_quality_validation ?? true
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`STRIDE data extraction failed: ${response.status} ${errorText}`)
+  }
+
+  const result = await response.json()
+  console.log('STRIDE data extraction result:', result)
+  return result
+}
+
 async function extractDFDComponents(pipelineId: string): Promise<{
   pipeline_id: string
   dfd_components: DFDComponents
@@ -193,7 +226,12 @@ async function extractDFDComponents(pipelineId: string): Promise<{
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      pipeline_id: pipelineId
+      pipeline_id: pipelineId,
+      background: false,
+      use_enhanced_extraction: true,
+      enable_stride_review: true,
+      enable_confidence_scoring: true,
+      enable_security_validation: true
     })
   })
   
@@ -232,7 +270,13 @@ async function generateThreats(pipelineId: string): Promise<ThreatGenerationResp
   const response = await fetch(`${API_URL}/api/documents/generate-threats`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pipeline_id: pipelineId })
+    body: JSON.stringify({ 
+      pipeline_id: pipelineId,
+      use_v2_generator: false,
+      context_aware: true,
+      use_v3_generator: true,
+      multi_agent: true
+    })
   })
   
   if (!response.ok) {
@@ -527,6 +571,7 @@ export const api = {
   uploadDocuments,
   uploadDocument,  // Legacy support
   getSampleDFD,
+  extractStrideData,
   extractDFDComponents,
   reviewDFDComponents,
   generateThreats,

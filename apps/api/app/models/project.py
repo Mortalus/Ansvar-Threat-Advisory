@@ -57,7 +57,7 @@ class ProjectSession(Base):
     is_main_branch = Column(Boolean, default=True)
     
     # Pipeline data
-    pipeline_id = Column(String(36), ForeignKey("pipelines.id"), nullable=True)
+    pipeline_id = Column(String(36), ForeignKey("pipelines.pipeline_id"), nullable=True)
     
     # Session state
     status = Column(String(50), default="active")  # active, completed, archived

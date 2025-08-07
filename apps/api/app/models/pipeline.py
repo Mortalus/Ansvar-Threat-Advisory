@@ -42,6 +42,8 @@ class Pipeline(BaseModel):
     text_length = Column(Integer, nullable=True)
     
     # Pipeline results (stored as JSON/JSONB)
+    extracted_security_data = Column(JSON, nullable=True)  # STRIDE-focused extracted data
+    extraction_metadata = Column(JSON, nullable=True)     # Extraction process metadata
     dfd_components = Column(JSON, nullable=True)
     dfd_validation = Column(JSON, nullable=True)
     threats = Column(JSON, nullable=True)

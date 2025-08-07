@@ -15,6 +15,15 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 # Maximum file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
+class ExtractDataRequest(BaseModel):
+    pipeline_id: str
+    background: bool = False  # Flag to enable background processing
+    enable_quality_validation: bool = True  # Enable quality validation pass
+
+class ReviewDataExtractionRequest(BaseModel):
+    pipeline_id: str
+    extracted_security_data: dict  # Updated extracted security data
+
 class ExtractDFDRequest(BaseModel):
     pipeline_id: str
     background: bool = False  # Flag to enable background processing
@@ -169,6 +178,117 @@ async def upload_documents(
             "error": str(e)
         }
 
+@router.post("/extract-data", response_model=dict)
+async def extract_security_data(
+    request: ExtractDataRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """
+    Extract security-focused data using STRIDE methodology.
+    This step runs after document upload and before DFD extraction.
+    
+    Performs two-pass extraction:
+    1. STRIDE Expert Pass: Extract security-relevant information
+    2. Quality Validator Pass: Enhance and validate the data
+    """
+    try:
+        logger.info(f"STRIDE data extraction request: quality_validation={request.enable_quality_validation}")
+        
+        if request.background:
+            # Background execution path
+            from app.tasks.pipeline_tasks import execute_pipeline_step
+            
+            task = execute_pipeline_step.delay(
+                pipeline_id=request.pipeline_id,
+                step="data_extraction",
+                data={
+                    "enable_quality_validation": request.enable_quality_validation
+                }
+            )
+            
+            return {
+                "pipeline_id": request.pipeline_id,
+                "task_id": task.id,
+                "status": "queued",
+                "message": "STRIDE data extraction queued for background processing"
+            }
+        
+        # Synchronous execution
+        pipeline_id = request.pipeline_id
+        logger.info(f"Extracting STRIDE security data for pipeline: {pipeline_id}")
+        
+        # Verify pipeline exists and document upload is complete
+        pipeline = await pipeline_manager.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail=f"Pipeline {pipeline_id} not found")
+        
+        if pipeline["steps"]["document_upload"]["status"] != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Document upload must be completed before data extraction"
+            )
+        
+        # Execute data extraction step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DATA_EXTRACTION,
+            data={
+                "enable_quality_validation": request.enable_quality_validation
+            }
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "extracted_security_data": result["extracted_security_data"],
+            "extraction_metadata": result["extraction_metadata"],
+            "quality_score": result.get("quality_score"),
+            "completeness_indicators": result.get("completeness_indicators"),
+            "status": "extracted"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"STRIDE data extraction failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"STRIDE data extraction failed: {str(e)}"
+        )
+
+@router.post("/review-data-extraction", response_model=dict)
+async def review_data_extraction(
+    request: ReviewDataExtractionRequest,
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """
+    Review and edit extracted security data.
+    Allows manual editing of STRIDE-extracted data before proceeding to DFD extraction.
+    """
+    try:
+        pipeline_id = request.pipeline_id
+        extracted_security_data = request.extracted_security_data
+        
+        # Execute data extraction review step
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DATA_EXTRACTION_REVIEW,
+            data={"extracted_security_data": extracted_security_data}
+        )
+        
+        return {
+            "pipeline_id": pipeline_id,
+            "extracted_security_data": result["extracted_security_data"],
+            "status": "reviewed",
+            "reviewed_at": result["reviewed_at"]
+        }
+    
+    except Exception as e:
+        logger.error(f"Data extraction review failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Data extraction review failed: {str(e)}"
+        )
+
 @router.post("/extract-dfd", response_model=dict)
 async def extract_dfd_from_documents(
     request: ExtractDFDRequest,
@@ -282,6 +402,10 @@ class ReviewDFDRequest(BaseModel):
 class GenerateThreatsRequest(BaseModel):
     pipeline_id: str
     # V3 is the only threat generator available (multi-agent analysis with context-aware risk scoring)
+    use_v2_generator: bool = False  # Legacy v2 generator (deprecated)
+    context_aware: bool = True  # Enable context-aware threat generation
+    use_v3_generator: bool = True  # Use V3 multi-agent generator (recommended)
+    multi_agent: bool = True  # Enable multi-agent analysis
 
 class RefineThreatRequest(BaseModel):
     pipeline_id: str

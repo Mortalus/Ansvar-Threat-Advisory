@@ -1,0 +1,26 @@
+E-commerce Web Application Security Architecture
+
+This document describes the security architecture for an e-commerce web application.
+
+Components:
+- Web Frontend: React-based customer interface running on Nginx
+- API Gateway: Handles authentication and request routing
+- User Service: Manages user accounts and authentication
+- Product Service: Manages product catalog and inventory
+- Order Service: Processes customer orders and payments
+- Database: PostgreSQL database storing user data, products, and orders
+- Payment Gateway: External Stripe integration for processing payments
+
+Security Controls:
+- HTTPS encryption for all communications
+- JWT tokens for authentication
+- Input validation on all API endpoints
+- SQL injection prevention using parameterized queries
+- Rate limiting on API endpoints
+- Password hashing using bcrypt
+- Multi-factor authentication for admin users
+
+Trust Boundaries:
+- Internet to DMZ: Customer traffic
+- DMZ to Internal Network: API calls between services
+- Internal Network to Database: Service-to-database communications

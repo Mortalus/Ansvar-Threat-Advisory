@@ -4,6 +4,8 @@ import type { DFDComponents, PipelineStatus } from './api'
 
 export type PipelineStep = 
   | 'document_upload'
+  | 'data_extraction'
+  | 'data_extraction_review'
   | 'dfd_extraction' 
   | 'dfd_review'
   | 'threat_generation'
@@ -99,6 +101,8 @@ const initialStepState: PipelineStepState = {
 
 const initialStepStates: Record<PipelineStep, PipelineStepState> = {
   document_upload: { ...initialStepState },
+  data_extraction: { ...initialStepState },
+  data_extraction_review: { ...initialStepState },
   dfd_extraction: { ...initialStepState },
   dfd_review: { ...initialStepState },
   threat_generation: { ...initialStepState },
@@ -263,23 +267,88 @@ export const useStore = create<StoreState>()(
       {
         name: 'threat-modeling-store',
         partialize: (state) => ({
-          // Only persist data tied to specific pipeline sessions
-          // Do not persist step states to avoid stale status showing
+          // DEFENSIVE: Always persist pipeline ID and related data
           currentPipelineId: state.currentPipelineId,
-          // Only persist DFD if it's tied to current pipeline
-          dfdComponents: state.currentPipelineId ? state.dfdComponents : null,
-          threats: state.currentPipelineId ? state.threats : null,
+          // Persist step results which contain pipeline IDs for recovery
+          stepResults: {
+            document_upload: state.stepStates.document_upload.result,
+            data_extraction: state.stepStates.data_extraction.result,
+            dfd_extraction: state.stepStates.dfd_extraction.result,
+          },
+          // Persist step statuses for UI continuity
+          stepStatuses: {
+            document_upload: state.stepStates.document_upload.status,
+            data_extraction: state.stepStates.data_extraction.status,
+            dfd_extraction: state.stepStates.dfd_extraction.status,
+            dfd_review: state.stepStates.dfd_review.status,
+            threat_generation: state.stepStates.threat_generation.status,
+          },
+          // Persist DFD and threats
+          dfdComponents: state.dfdComponents,
+          threats: state.threats,
+          // Backup pipeline ID in multiple places
+          backupPipelineId: state.currentPipelineId,
         }),
         onRehydrateStorage: () => (state) => {
-          // Clear stale data when rehydrating from localStorage
-          if (state && (!state.currentPipelineId || !state.dfdComponents)) {
-            state.dfdComponents = null
-            state.dfdValidation = null
-            state.threats = []
-            state.refinedThreats = []
-            state.attackPaths = []
-            // Reset all step states to prevent stale status
-            state.stepStates = initialStepStates
+          // DEFENSIVE: Multi-layer pipeline ID recovery on rehydration
+          if (state) {
+            console.log('🔧 Store rehydration - checking pipeline ID integrity')
+            
+            // Layer 1: Try to recover pipeline ID from multiple sources
+            let recoveredPipelineId = state.currentPipelineId
+            
+            // Layer 2: Check backup pipeline ID (if it exists in persisted state)
+            if (!recoveredPipelineId && (state as any).backupPipelineId) {
+              console.log('🔧 Recovering pipeline ID from backup')
+              recoveredPipelineId = (state as any).backupPipelineId
+            }
+            
+            // Layer 3: Check step results for pipeline ID
+            if (!recoveredPipelineId && (state as any).stepResults) {
+              if ((state as any).stepResults.document_upload?.pipeline_id) {
+                console.log('🔧 Recovering pipeline ID from document upload result')
+                recoveredPipelineId = (state as any).stepResults.document_upload.pipeline_id
+              } else if ((state as any).stepResults.dfd_extraction?.pipeline_id) {
+                console.log('🔧 Recovering pipeline ID from DFD extraction result')
+                recoveredPipelineId = (state as any).stepResults.dfd_extraction.pipeline_id
+              }
+            }
+            
+            // Apply recovered pipeline ID
+            if (recoveredPipelineId) {
+              state.currentPipelineId = recoveredPipelineId
+              console.log('✅ Pipeline ID recovered:', recoveredPipelineId)
+            } else {
+              console.warn('⚠️ No pipeline ID could be recovered - resetting state')
+              // Only reset if we truly can't recover
+              state.dfdComponents = null
+              state.dfdValidation = null
+              state.threats = []
+              state.refinedThreats = []
+              state.attackPaths = []
+              state.stepStates = initialStepStates
+            }
+            
+            // Restore step statuses if available (from persisted state)
+            const persistedState = state as any
+            if (persistedState.stepStatuses) {
+              Object.keys(persistedState.stepStatuses).forEach((step) => {
+                const pipelineStep = step as PipelineStep
+                if (state.stepStates[pipelineStep]) {
+                  state.stepStates[pipelineStep].status = persistedState.stepStatuses[step]
+                }
+              })
+            }
+            
+            // Restore step results if available (from persisted state)
+            if (persistedState.stepResults) {
+              Object.keys(persistedState.stepResults).forEach((step) => {
+                const pipelineStep = step as PipelineStep
+                if (state.stepStates[pipelineStep] && persistedState.stepResults[step]) {
+                  state.stepStates[pipelineStep].result = persistedState.stepResults[step]
+                }
+              })
+            }
           }
         },
       }
