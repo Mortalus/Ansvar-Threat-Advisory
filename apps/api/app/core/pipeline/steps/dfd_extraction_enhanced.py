@@ -55,13 +55,14 @@ async def extract_dfd_enhanced(
     try:
         # Stage 1: Initial DFD Extraction (existing logic)
         logger.info("Stage 1: Initial DFD extraction")
-        initial_dfd = await extract_dfd_from_text(
+        initial_dfd, token_usage_stage1 = await extract_dfd_from_text(
             llm_provider=llm_provider,
             document_text=document_text
         )
         
         logger.info(f"Initial extraction: {len(initial_dfd.processes)} processes, "
                    f"{len(initial_dfd.assets)} assets, {len(initial_dfd.data_flows)} data flows")
+        logger.info(f"Stage 1 token usage: {token_usage_stage1['total_tokens']} tokens, ${token_usage_stage1['total_cost_usd']:.4f}")
         
         # If enhancements disabled, return initial result
         if not (enable_stride_review or enable_confidence_scoring or enable_security_validation):
@@ -183,13 +184,14 @@ async def extract_dfd_enhanced(
         # Fallback to basic extraction
         try:
             logger.info("Falling back to basic DFD extraction")
-            fallback_dfd = await extract_dfd_from_text(llm_provider, document_text)
+            fallback_dfd, token_usage_fallback = await extract_dfd_from_text(llm_provider, document_text)
             
             return fallback_dfd, {
                 "enhancement_enabled": False,
                 "error": str(e),
                 "fallback_used": True,
-                "extraction_time_seconds": (datetime.utcnow() - start_time).total_seconds()
+                "extraction_time_seconds": (datetime.utcnow() - start_time).total_seconds(),
+                "token_usage": token_usage_fallback
             }
             
         except Exception as fallback_error:

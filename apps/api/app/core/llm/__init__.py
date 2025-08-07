@@ -89,6 +89,41 @@ async def get_llm_provider(step: str = "default") -> BaseLLMProvider:
         logger.info("Falling back to mock LLM provider for development/testing")
         return MockLLMProvider()
 
+async def get_system_prompt_for_step(
+    step_name: str,
+    agent_type: Optional[str] = None,
+    fallback_prompt: Optional[str] = None,
+    db_session = None
+) -> str:
+    """
+    Get the system prompt for a specific step and agent.
+    This function integrates with the customizable prompt system.
+    
+    Args:
+        step_name: The LLM step name (e.g., 'threat_generation', 'dfd_extraction')
+        agent_type: Optional agent type (e.g., 'architectural_risk', 'business_financial')
+        fallback_prompt: Fallback prompt if no custom prompt is found
+        db_session: Database session (if None, will use fallback_prompt)
+        
+    Returns:
+        System prompt string to use
+    """
+    if db_session:
+        try:
+            from app.services.settings_service import SettingsService
+            settings_service = SettingsService(db_session)
+            return await settings_service.get_system_prompt_for_step(
+                step_name, agent_type, fallback_prompt
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get custom prompt for {step_name}/{agent_type}: {e}")
+    
+    # Fall back to provided fallback_prompt or generic default
+    if fallback_prompt:
+        return fallback_prompt
+    
+    return "You are a helpful AI assistant specialized in cybersecurity analysis."
+
 def test_llm_provider(provider: BaseLLMProvider) -> bool:
     """
     Test if an LLM provider is working correctly.
@@ -122,5 +157,6 @@ __all__ = [
     "ScalewayProvider",
     "MockLLMProvider",
     "get_llm_provider",
+    "get_system_prompt_for_step",
     "test_llm_provider"
 ]

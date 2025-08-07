@@ -14,7 +14,8 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from abc import ABC, abstractmethod
-from app.core.llm import get_llm_provider
+from app.core.llm import get_llm_provider, get_system_prompt_for_step
+from app.utils.token_counter import TokenCounter
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,8 @@ class ArchitecturalRiskAgent(BaseAnalyzerAgent):
         self,
         document_text: str,
         dfd_components: Dict[str, Any],
-        existing_threats: List[Dict[str, Any]]
+        existing_threats: List[Dict[str, Any]],
+        db_session = None
     ) -> List[Dict[str, Any]]:
         """LLM-powered architectural risk analysis."""
         logger.info("🏗️ Starting LLM-powered architectural risk analysis...")
@@ -130,11 +132,20 @@ class ArchitecturalRiskAgent(BaseAnalyzerAgent):
             components_summary = self._prepare_components_summary(dfd_components)
             existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
             
+            # Get custom system prompt (with fallback)
+            fallback_prompt = "You are an expert Enterprise Architect and Security Professional specializing in identifying systemic architectural vulnerabilities that traditional security scans miss."
+            system_prompt = await get_system_prompt_for_step(
+                step_name="threat_generation",
+                agent_type="architectural_risk",
+                fallback_prompt=fallback_prompt,
+                db_session=db_session
+            )
+            
             # Create architectural analysis prompt
-            architectural_prompt = f"""You are an expert Enterprise Architect and Security Professional specializing in identifying systemic architectural vulnerabilities that traditional security scans miss.
+            architectural_prompt = f"""{system_prompt}
 
 SYSTEM DOCUMENTATION:
-{document_text[:3000]}  
+{document_text}  
 
 COMPONENTS IDENTIFIED:
 {components_summary}
@@ -182,8 +193,21 @@ Generate 3-7 HIGH-QUALITY architectural threats. Focus on systemic risks that co
                 max_tokens=2000
             )
             
+            # Track token usage
+            model_name = getattr(llm_provider, 'model', 'unknown')
+            token_usage = TokenCounter.track_llm_usage(
+                prompt=architectural_prompt,
+                response=llm_response.content,
+                model=model_name
+            )
+            logger.info(f"🏗️ Architectural analysis: {token_usage['total_tokens']} tokens, ${token_usage['total_cost_usd']:.4f}")
+            
             # Parse LLM response
             threats = self._parse_llm_threats(llm_response.content)
+            
+            # Add token usage metadata to each threat
+            for threat in threats:
+                threat['token_usage'] = token_usage
             
             logger.info(f"🏗️ Architectural Risk Agent generated {len(threats)} LLM-powered threats")
             return threats
@@ -493,7 +517,8 @@ class BusinessFinancialRiskAgent(BaseAnalyzerAgent):
         self,
         document_text: str,
         dfd_components: Dict[str, Any],
-        existing_threats: List[Dict[str, Any]]
+        existing_threats: List[Dict[str, Any]],
+        db_session = None
     ) -> List[Dict[str, Any]]:
         """LLM-powered business and financial risk analysis."""
         logger.info("💼 Starting LLM-powered business & financial risk analysis...")
@@ -506,11 +531,20 @@ class BusinessFinancialRiskAgent(BaseAnalyzerAgent):
             components_summary = self._prepare_components_summary(dfd_components)
             existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
             
+            # Get custom system prompt (with fallback)
+            fallback_prompt = "You are a Chief Risk Officer and Business Continuity Expert with deep expertise in quantifying cybersecurity threats' impact on business operations and financial performance."
+            system_prompt = await get_system_prompt_for_step(
+                step_name="threat_generation",
+                agent_type="business_financial",
+                fallback_prompt=fallback_prompt,
+                db_session=db_session
+            )
+            
             # Create business risk analysis prompt
-            business_prompt = f"""You are a Chief Risk Officer and Business Continuity Expert with deep expertise in quantifying cybersecurity threats' impact on business operations and financial performance.
+            business_prompt = f"""{system_prompt}
 
 SYSTEM DOCUMENTATION:
-{document_text[:3000]}
+{document_text}
 
 SYSTEM COMPONENTS:
 {components_summary}
@@ -561,8 +595,21 @@ Generate 2-5 HIGH-IMPACT business risks. Focus on threats that would cause signi
                 max_tokens=2000
             )
             
+            # Track token usage
+            model_name = getattr(llm_provider, 'model', 'unknown')
+            token_usage = TokenCounter.track_llm_usage(
+                prompt=business_prompt,
+                response=llm_response.content,
+                model=model_name
+            )
+            logger.info(f"💼 Business analysis: {token_usage['total_tokens']} tokens, ${token_usage['total_cost_usd']:.4f}")
+            
             # Parse LLM response
             threats = self._parse_llm_threats(llm_response.content)
+            
+            # Add token usage metadata to each threat
+            for threat in threats:
+                threat['token_usage'] = token_usage
             
             logger.info(f"💼 Business & Financial Risk Agent generated {len(threats)} LLM-powered threats")
             return threats
@@ -946,7 +993,8 @@ class ComplianceGovernanceAgent(BaseAnalyzerAgent):
         self,
         document_text: str,
         dfd_components: Dict[str, Any],
-        existing_threats: List[Dict[str, Any]]
+        existing_threats: List[Dict[str, Any]],
+        db_session = None
     ) -> List[Dict[str, Any]]:
         """LLM-powered compliance and governance analysis."""
         logger.info("⚖️ Starting LLM-powered compliance & governance analysis...")
@@ -959,11 +1007,20 @@ class ComplianceGovernanceAgent(BaseAnalyzerAgent):
             components_summary = self._prepare_components_summary(dfd_components)
             existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
             
+            # Get custom system prompt (with fallback)
+            fallback_prompt = "You are a Chief Compliance Officer and Regulatory Audit Expert with deep expertise in cybersecurity compliance frameworks (GDPR, PCI-DSS, HIPAA, SOX, ISO 27001) and governance standards."
+            system_prompt = await get_system_prompt_for_step(
+                step_name="threat_generation",
+                agent_type="compliance_governance",
+                fallback_prompt=fallback_prompt,
+                db_session=db_session
+            )
+            
             # Create compliance analysis prompt
-            compliance_prompt = f"""You are a Chief Compliance Officer and Regulatory Audit Expert with deep expertise in cybersecurity compliance frameworks (GDPR, PCI-DSS, HIPAA, SOX, ISO 27001) and governance standards.
+            compliance_prompt = f"""{system_prompt}
 
 SYSTEM DOCUMENTATION:
-{document_text[:3000]}
+{document_text}
 
 SYSTEM COMPONENTS:
 {components_summary}
@@ -1020,8 +1077,21 @@ Generate 2-5 HIGH-PRIORITY compliance threats. Focus on violations that would tr
                 max_tokens=2000
             )
             
+            # Track token usage
+            model_name = getattr(llm_provider, 'model', 'unknown')
+            token_usage = TokenCounter.track_llm_usage(
+                prompt=compliance_prompt,
+                response=llm_response.content,
+                model=model_name
+            )
+            logger.info(f"⚖️ Compliance analysis: {token_usage['total_tokens']} tokens, ${token_usage['total_cost_usd']:.4f}")
+            
             # Parse LLM response
             threats = self._parse_llm_threats(llm_response.content)
+            
+            # Add token usage metadata to each threat
+            for threat in threats:
+                threat['token_usage'] = token_usage
             
             logger.info(f"⚖️ Compliance & Governance Agent generated {len(threats)} LLM-powered threats")
             return threats
@@ -1353,7 +1423,8 @@ class MultiAgentOrchestrator:
         self,
         document_text: str,
         dfd_components: Dict[str, Any],
-        existing_threats: List[Dict[str, Any]] = None
+        existing_threats: List[Dict[str, Any]] = None,
+        db_session = None
     ) -> Dict[str, Any]:
         """
         Run all agents and consolidate findings.
@@ -1388,7 +1459,7 @@ class MultiAgentOrchestrator:
         # Create concurrent tasks for all agents
         agent_tasks = []
         for agent in self.agents:
-            task = agent.analyze(document_text, dfd_components, existing_threats)
+            task = agent.analyze(document_text, dfd_components, existing_threats, db_session)
             agent_tasks.append((agent, task))
         
         # Execute all agents concurrently

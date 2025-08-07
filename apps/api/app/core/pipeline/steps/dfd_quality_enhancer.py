@@ -258,7 +258,7 @@ Be specific and justify each addition with evidence from the document.
         initial_dfd_json = initial_dfd.json(indent=2)
         
         prompt = self.expert_prompt_template.format(
-            document_text=document_text[:10000],  # Limit context
+            document_text=document_text,  # No character limit
             initial_dfd_json=initial_dfd_json
         )
         

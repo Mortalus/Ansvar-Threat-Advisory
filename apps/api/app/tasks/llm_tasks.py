@@ -88,10 +88,12 @@ async def _extract_dfd_async(pipeline_id: str, document_text: str, llm_config: O
     provider = await get_llm_provider(step="dfd_extraction")
     
     # Extract DFD components
-    dfd_components = await extract_dfd_from_text(
+    dfd_components, token_usage = await extract_dfd_from_text(
         llm_provider=provider,
         document_text=document_text
     )
+    
+    logger.info(f"DFD extraction token usage: {token_usage['total_tokens']} tokens, ${token_usage['total_cost_usd']:.4f}")
     
     # Validate extraction
     validation_result = await validate_dfd_components(dfd_components)

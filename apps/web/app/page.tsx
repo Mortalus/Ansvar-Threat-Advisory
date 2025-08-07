@@ -451,7 +451,14 @@ export default function HomePage() {
               <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <p className="text-green-400">DFD extraction completed successfully!</p>
+                  <div className="flex flex-col">
+                    <p className="text-green-400">DFD extraction completed successfully!</p>
+                    {stepStates.dfd_extraction.result?.quality_report?.token_usage && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        🪙 {stepStates.dfd_extraction.result.quality_report.token_usage.total_tokens.toLocaleString()} tokens • ${stepStates.dfd_extraction.result.quality_report.token_usage.total_cost_usd.toFixed(4)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setCurrentStep('dfd_review')}
@@ -468,7 +475,14 @@ export default function HomePage() {
                 <div className="space-y-6">
                   {/* Summary Card */}
                   <div className="card-bg rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-4">Extraction Summary</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Extraction Summary</h3>
+                      {stepStates.dfd_extraction.result?.quality_report?.token_usage && (
+                        <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-1 rounded-full">
+                          🪙 {stepStates.dfd_extraction.result.quality_report.token_usage.total_tokens.toLocaleString()} tokens • ${stepStates.dfd_extraction.result.quality_report.token_usage.total_cost_usd.toFixed(4)}
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-purple-400">{dfdComponents.external_entities?.length || 0}</div>

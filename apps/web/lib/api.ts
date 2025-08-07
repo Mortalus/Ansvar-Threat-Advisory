@@ -167,6 +167,22 @@ async function extractDFDComponents(pipelineId: string): Promise<{
   dfd_components: DFDComponents
   validation: any
   status: string
+  quality_report?: {
+    enhancement_enabled: boolean
+    token_usage?: {
+      total_tokens: number
+      total_cost_usd: number
+      model_name: string
+    }
+    quality_summary?: {
+      overall_quality_score: number
+      components_added: number
+      improvement_percentage: string
+    }
+    extraction_time_seconds: number
+    confidence_analysis?: any
+    security_analysis?: any
+  }
 }> {
   const response = await fetch(`${API_URL}/api/documents/extract-dfd`, {
     method: 'POST',

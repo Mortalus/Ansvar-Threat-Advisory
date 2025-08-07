@@ -3,6 +3,7 @@ import logging
 from typing import Optional, Dict, Any
 from app.core.llm.base import BaseLLMProvider, LLMResponse
 from app.models.dfd import DFDComponents, DataFlow
+from app.utils.token_counter import TokenCounter
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ async def extract_dfd_from_text(
     llm_provider: BaseLLMProvider,
     document_text: str,
     use_instructor: bool = True
-) -> DFDComponents:
+) -> tuple[DFDComponents, Dict[str, Any]]:
     """
     Extract DFD components from document text using an LLM provider.
     
@@ -71,9 +72,9 @@ async def extract_dfd_from_text(
         use_instructor: Whether to use instructor library for structured output
     
     Returns:
-        DFDComponents model with extracted information
+        Tuple of (DFDComponents model with extracted information, token usage data)
     """
-    prompt = EXTRACT_PROMPT_TEMPLATE.format(documents=document_text[:15000])  # Limit context size
+    prompt = EXTRACT_PROMPT_TEMPLATE.format(documents=document_text)  # No character limit
     
     logger.info(f"Extracting DFD components using {llm_provider.__class__.__name__}")
     
@@ -118,13 +119,23 @@ async def extract_dfd_from_text(
             system_prompt="You are a cybersecurity expert. Output only valid JSON matching the schema provided."
         )
         
+        # Track token usage
+        model_name = getattr(llm_provider, 'model', 'unknown')
+        token_usage = TokenCounter.track_llm_usage(
+            prompt=prompt,
+            response=response.content,
+            model=model_name
+        )
+        
         # Parse the response
-        return parse_llm_response(response.content)
+        dfd_components = parse_llm_response(response.content)
+        
+        return dfd_components, token_usage
         
     except Exception as e:
         logger.error(f"Failed to extract DFD components: {e}")
-        # Return a default structure with error indication
-        return DFDComponents(
+        # Return a default structure with error indication and empty token usage
+        default_components = DFDComponents(
             project_name="Extraction Failed",
             project_version="0.0",
             industry_context=f"Error: {str(e)[:100]}",
@@ -134,6 +145,16 @@ async def extract_dfd_from_text(
             trust_boundaries=[],
             data_flows=[]
         )
+        
+        empty_usage = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "total_cost_usd": 0.0,
+            "model": "error"
+        }
+        
+        return default_components, empty_usage
 
 def parse_llm_response(response_text: str) -> DFDComponents:
     """

@@ -350,10 +350,14 @@ class PipelineManager:
             # Use original extraction method
             logger.info("Using original DFD extraction method")
             
-            dfd_components = await extract_dfd_from_text(
+            dfd_components, token_usage = await extract_dfd_from_text(
                 llm_provider=self.llm_provider,
                 document_text=document_text
             )
+            
+            # Store token usage in step result
+            step_result.metadata = step_result.metadata or {}
+            step_result.metadata['token_usage'] = token_usage
             
             # Validate the extraction
             validation_result = await validate_dfd_components(dfd_components)

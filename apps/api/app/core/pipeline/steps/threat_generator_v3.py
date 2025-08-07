@@ -94,7 +94,8 @@ class ThreatGeneratorV3:
                 agent_results = await self.agent_orchestrator.analyze_system(
                     document_text=document_text,
                     dfd_components=component_data,
-                    existing_threats=context_aware_threats
+                    existing_threats=context_aware_threats,
+                    db_session=db_session
                 )
                 
                 architectural_risks = agent_results.get('architectural_risks', [])
