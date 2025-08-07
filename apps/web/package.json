@@ -1,7 +1,8 @@
 {
-  "name": "threat-modeling-web",
+  "name": "ansvar-threat-advisory",
   "version": "0.1.0",
   "private": true,
+  "description": "AI-powered threat modeling and security analysis platform",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

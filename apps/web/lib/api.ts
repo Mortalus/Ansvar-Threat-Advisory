@@ -427,6 +427,100 @@ async function healthCheck(): Promise<{ status: string; timestamp: string }> {
   return response.json()
 }
 
+// Prompt Management API
+async function getLLMSteps() {
+  try {
+    const response = await fetch(`${API_URL}/api/settings/llm-steps`)
+    if (!response.ok) {
+      console.warn(`LLM steps endpoint returned ${response.status}`)
+      return []
+    }
+    const data = await response.json()
+    return Array.isArray(data) ? data : []
+  } catch (error) {
+    console.warn('LLM steps endpoint not available:', error)
+    return []
+  }
+}
+
+async function getPromptTemplates() {
+  try {
+    const response = await fetch(`${API_URL}/api/settings/prompts`)
+    if (!response.ok) {
+      console.warn(`Prompt templates endpoint returned ${response.status}`)
+      return []
+    }
+    const data = await response.json()
+    return Array.isArray(data) ? data : []
+  } catch (error) {
+    console.warn('Prompt templates endpoint not available:', error)
+    return []
+  }
+}
+
+async function getActivePrompt(stepName: string, agentType?: string) {
+  try {
+    const url = agentType 
+      ? `${API_URL}/api/settings/prompts/active/${stepName}?agent_type=${agentType}`
+      : `${API_URL}/api/settings/prompts/active/${stepName}`
+    const response = await fetch(url)
+    if (!response.ok) {
+      console.warn(`Active prompt endpoint returned ${response.status}`)
+      return { system_prompt: '', description: '' }
+    }
+    return response.json()
+  } catch (error) {
+    console.warn('Active prompt endpoint not available:', error)
+    return { system_prompt: '', description: '' }
+  }
+}
+
+async function createPromptTemplate(data: {
+  step_name: string
+  agent_type?: string
+  system_prompt: string
+  description: string
+  is_active?: boolean
+}) {
+  const response = await fetch(`${API_URL}/api/settings/prompts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to create prompt template')
+  return response.json()
+}
+
+async function updatePromptTemplate(id: string, data: {
+  system_prompt?: string
+  description?: string
+  is_active?: boolean
+}) {
+  const response = await fetch(`${API_URL}/api/settings/prompts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) throw new Error('Failed to update prompt template')
+  return response.json()
+}
+
+async function deletePromptTemplate(id: string) {
+  const response = await fetch(`${API_URL}/api/settings/prompts/${id}`, {
+    method: 'DELETE'
+  })
+  if (!response.ok) throw new Error('Failed to delete prompt template')
+  return response.json()
+}
+
+async function initializeDefaultPrompts() {
+  const response = await fetch(`${API_URL}/api/settings/prompts/initialize-defaults`, {
+    method: 'POST'
+  })
+  if (!response.ok) throw new Error('Failed to initialize default prompts')
+  return response.json()
+}
+
 // Export API object with all methods
 export const api = {
   // Document methods
@@ -454,6 +548,15 @@ export const api = {
   
   // Health
   healthCheck,
+  
+  // Prompt Management
+  getLLMSteps,
+  getPromptTemplates,
+  getActivePrompt,
+  createPromptTemplate,
+  updatePromptTemplate,
+  deletePromptTemplate,
+  initializeDefaultPrompts,
   
   // Debug functions
   quickRefineThreats,

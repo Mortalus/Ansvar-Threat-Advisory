@@ -6,8 +6,8 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ThreatModel AI - Security Requirements Analysis',
-  description: 'AI-powered threat modeling pipeline',
+  title: 'Ansvar Threat Advisory',
+  description: 'AI-powered threat modeling and security analysis platform',
 }
 
 export default function RootLayout({
@@ -17,6 +17,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" type="image/svg+xml" href="/ansvar-logo.svg" />
+        <link rel="alternate icon" href="/favicon.ico" />
+      </head>
       <body className={inter.className}>
         {children}
         <Toaster />

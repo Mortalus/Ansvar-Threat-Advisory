@@ -3,9 +3,10 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { api, Threat, RefinedThreat, ThreatRefinementResponse } from '@/lib/api'
-import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star } from 'lucide-react'
+import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star, Settings } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
 import { DebugPanel } from '@/components/debug/debug-panel'
+import { PromptManager } from '@/components/ai-customization/prompt-manager'
 
 export default function HomePage() {
   const [isDragging, setIsDragging] = useState(false)
@@ -288,9 +289,15 @@ export default function HomePage() {
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Upload Documents</h2>
+              <div className="flex items-center gap-3 mb-4">
+                <img src="/ansvar-logo.svg" alt="Ansvar" className="w-8 h-8" />
+                <div>
+                  <h2 className="text-2xl font-bold">Upload Documents</h2>
+                  <p className="text-sm text-purple-400">Ansvar Threat Advisory</p>
+                </div>
+              </div>
               <p className="text-gray-400">
-                Upload your system architecture documents to begin threat modeling
+                Upload your system architecture documents to begin AI-powered threat modeling
               </p>
             </div>
 
@@ -370,7 +377,10 @@ export default function HomePage() {
                   <div className="space-y-4">
                     <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-green-500" />
-                      <p className="text-green-400">Documents uploaded successfully!</p>
+                      <div>
+                        <p className="text-green-400">Documents uploaded successfully!</p>
+                        <p className="text-xs text-gray-500">Ansvar AI is ready to analyze your architecture</p>
+                      </div>
                     </div>
                     
                     <div className="flex items-center justify-between p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
@@ -542,9 +552,15 @@ export default function HomePage() {
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Threat Generation</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <Shield className="w-8 h-8 text-purple-500" />
+                <div>
+                  <h2 className="text-2xl font-bold">Threat Generation</h2>
+                  <p className="text-sm text-purple-400">Powered by Ansvar AI</p>
+                </div>
+              </div>
               <p className="text-gray-400">
-                Identifying potential security threats using RAG-powered AI analysis
+                Identifying potential security threats using advanced AI analysis with CWE knowledge base
               </p>
             </div>
 
@@ -700,7 +716,13 @@ export default function HomePage() {
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">AI-Powered Threat Refinement</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <Brain className="w-8 h-8 text-purple-500" />
+                <div>
+                  <h2 className="text-2xl font-bold">AI-Powered Threat Refinement</h2>
+                  <p className="text-sm text-purple-400">Ansvar Intelligence Engine</p>
+                </div>
+              </div>
               <p className="text-gray-400">
                 Enhance threats with contextual risk analysis, business impact assessment, and intelligent prioritization
               </p>
@@ -934,6 +956,9 @@ export default function HomePage() {
           </div>
         )
 
+      case 'ai_customization':
+        return <PromptManager />
+
       default:
         return null
     }
@@ -944,7 +969,13 @@ export default function HomePage() {
       <div className="flex h-screen">
         {/* Sidebar */}
         <div className="w-80 bg-[#151520] border-r border-[#2a2a4a] p-6">
-          <h1 className="text-2xl font-bold mb-8">Threat Modeling</h1>
+          <div className="flex items-center gap-3 mb-8">
+            <img src="/ansvar-logo.svg" alt="Ansvar Logo" className="w-8 h-8" />
+            <div>
+              <h1 className="text-xl font-bold">Ansvar</h1>
+              <p className="text-sm text-gray-400">Threat Advisory</p>
+            </div>
+          </div>
           
           <div className="space-y-4">
             {[
@@ -954,6 +985,7 @@ export default function HomePage() {
               { id: 'threat_generation', name: 'Threat Generation' },
               { id: 'threat_refinement', name: 'Threat Refinement' },
               { id: 'attack_path_analysis', name: 'Attack Path Analysis' },
+              { id: 'ai_customization', name: 'AI Customization' },
             ].map((step) => {
               const status = stepStates[step.id as keyof typeof stepStates].status
               const isActive = currentStep === step.id
@@ -964,9 +996,13 @@ export default function HomePage() {
               // Check if step is accessible based on previous steps
               const steps = ['document_upload', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis']
               const stepIndex = steps.indexOf(step.id)
-              const canAccess = stepIndex === 0 || steps.slice(0, stepIndex).every(prevStep => 
-                stepStates[prevStep as keyof typeof stepStates]?.status === 'complete'
-              )
+              
+              // AI Customization is always accessible (it's a settings page)
+              const canAccess = step.id === 'ai_customization' || 
+                                stepIndex === 0 || 
+                                steps.slice(0, stepIndex).every(prevStep => 
+                                  stepStates[prevStep as keyof typeof stepStates]?.status === 'complete'
+                                )
               
               return (
                 <button
@@ -991,6 +1027,7 @@ export default function HomePage() {
                       {isComplete ? '✓' : 
                        isError ? '!' :
                        isInProgress ? '...' :
+                       step.id === 'ai_customization' ? <Settings className="w-4 h-4" /> :
                        ['1', '2', '3', '4', '5', '6'][['document_upload', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
                     </div>
                     <div className="flex-1">

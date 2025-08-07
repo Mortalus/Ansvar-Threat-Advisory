@@ -9,6 +9,7 @@ export type PipelineStep =
   | 'threat_generation'
   | 'threat_refinement'
   | 'attack_path_analysis'
+  | 'ai_customization'
 
 export type StepStatus = 'pending' | 'in_progress' | 'complete' | 'error'
 
@@ -103,6 +104,7 @@ const initialStepStates: Record<PipelineStep, PipelineStepState> = {
   threat_generation: { ...initialStepState },
   threat_refinement: { ...initialStepState },
   attack_path_analysis: { ...initialStepState },
+  ai_customization: { ...initialStepState, status: 'complete' }, // Always accessible
 }
 
 export const useStore = create<StoreState>()(
