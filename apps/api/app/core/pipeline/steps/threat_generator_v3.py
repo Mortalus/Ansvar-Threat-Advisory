@@ -84,6 +84,16 @@ class ThreatGeneratorV3:
             logger.info("🚀 === THREAT GENERATOR V3 EXECUTION START ===")
             logger.info("🤖 Starting V3 integrated multi-agent threat analysis")
             
+            # Ensure component_data is a dictionary, not a JSON string
+            import json
+            if isinstance(component_data, str):
+                logger.warning("⚠️ Component data is a string, parsing JSON...")
+                try:
+                    component_data = json.loads(component_data)
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ Failed to parse component data JSON: {e}")
+                    raise ValueError(f"Invalid component data format: {e}")
+            
             # Log input data summary
             components_count = len(component_data.get('processes', [])) + len(component_data.get('assets', [])) + len(component_data.get('external_entities', []))
             doc_length = len(document_text) if document_text else 0

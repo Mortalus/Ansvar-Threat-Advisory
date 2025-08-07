@@ -676,6 +676,16 @@ class PipelineManager:
             logger.error("❌ No DFD components found! Run DFD extraction first.")
             raise ValueError("DFD components not found. Run DFD extraction first.")
         
+        # Ensure dfd_components is a dictionary, not a JSON string
+        import json
+        if isinstance(dfd_components, str):
+            logger.warning("⚠️ DFD components is a string, parsing JSON...")
+            try:
+                dfd_components = json.loads(dfd_components)
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Failed to parse DFD components JSON: {e}")
+                raise ValueError(f"Invalid DFD components format: {e}")
+        
         logger.info(f"✅ DFD components loaded: {len(dfd_components.get('processes', []))} processes, {len(dfd_components.get('assets', []))} assets")
         
         # Always use V3 - the only threat generator available

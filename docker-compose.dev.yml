@@ -1,0 +1,48 @@
+# Development-specific overrides for Docker Compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Development overrides for frontend
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Enable hot reloading with proper file watching
+      - ./apps/web:/app
+      - /app/node_modules  # Prevent node_modules from being overwritten
+      - /app/.next         # Prevent .next cache issues
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_BASE_URL=
+      - NEXT_PUBLIC_WS_BASE_URL=
+      - CHOKIDAR_USEPOLLING=true  # Fix file watching in Docker
+      - WATCHPACK_POLLING=true    # Additional polling fallback
+    command: npm run dev
+
+  # Development overrides for API
+  api:
+    volumes:
+      # Enable hot reloading for API
+      - ./apps/api:/app
+      - /app/__pycache__  # Prevent Python cache issues
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=http://localhost,http://localhost:3000,http://localhost:3001,http://web:3000
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1  # Prevent .pyc files
+      - PYTHONUNBUFFERED=1         # Ensure logs are visible
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+      "
+
+  # Development proxy with enhanced error handling
+  gateway:
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - web

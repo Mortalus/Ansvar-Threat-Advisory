@@ -518,53 +518,78 @@ async def check_connection_health():
             logger.error("❌ Auto-recovery failed - manual intervention required")
             return False, True
 
-# SIMPLIFIED resilient session creator to prevent recursion
+# NUCLEAR OPTION: Completely fresh session for each request
 async def get_resilient_session_with_recovery():
     """
-    Get a database session with simple retry logic (NO recursion)
-    This is the BULLETPROOF session getter without circular dependencies
+    NUCLEAR OPTION: Create completely fresh database connection for each request
+    This bypasses ALL connection pooling issues by creating new connections
     """
-    max_retries = 3
+    max_retries = 2
     retry_count = 0
     
     while retry_count < max_retries:
         try:
-            # Create session directly (no health check to avoid recursion)
-            session = AsyncSessionLocal()
+            # Create a NEW engine and session maker for this request only
+            fresh_engine = create_async_engine(
+                ASYNC_DATABASE_URL,
+                # Minimal configuration for single-use connection
+                pool_size=1,
+                max_overflow=0,
+                pool_timeout=5,
+                pool_pre_ping=False,
+                pool_recycle=-1,  # Never recycle since it's single-use
+                echo=False,
+            )
             
-            # Simple connection test with rollback protection
-            try:
-                await session.execute(text("SELECT 1"))
-                logger.debug(f"✅ Resilient session created successfully (attempt {retry_count + 1})")
-                return session
-            except Exception as test_error:
-                # If the test query fails, try to rollback any invalid transaction
-                error_msg = str(test_error).lower()
-                if "rollback" in error_msg or "invalid transaction" in error_msg:
-                    logger.warning(f"🔄 Detected transaction issue, attempting rollback: {test_error}")
+            fresh_session_maker = async_sessionmaker(
+                bind=fresh_engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
+            
+            # Create session from fresh engine
+            session = fresh_session_maker()
+            
+            # Test the connection
+            await session.execute(text("SELECT 1"))
+            logger.debug(f"✅ Fresh session created successfully (attempt {retry_count + 1})")
+            
+            # Return a wrapper that cleans up the engine when the session closes
+            class FreshSessionWrapper:
+                def __init__(self, session, engine):
+                    self._session = session
+                    self._engine = engine
+                    
+                async def execute(self, *args, **kwargs):
+                    return await self._session.execute(*args, **kwargs)
+                
+                async def commit(self):
+                    return await self._session.commit()
+                
+                async def rollback(self):
+                    return await self._session.rollback()
+                
+                async def close(self):
                     try:
-                        await session.rollback()
-                        # Try the test query again after rollback
-                        await session.execute(text("SELECT 1"))
-                        logger.info("✅ Session recovered after transaction rollback")
-                        return session
-                    except Exception as rollback_error:
-                        logger.warning(f"⚠️ Rollback recovery failed: {rollback_error}")
-                        await session.close()
-                        raise test_error
-                else:
-                    await session.close()
-                    raise test_error
+                        await self._session.close()
+                    finally:
+                        await self._engine.dispose()
+                        logger.debug("🧹 Fresh engine disposed")
+                
+                def __getattr__(self, name):
+                    return getattr(self._session, name)
+            
+            return FreshSessionWrapper(session, fresh_engine)
             
         except Exception as session_error:
             retry_count += 1
-            logger.warning(f"⚠️ Session creation failed (attempt {retry_count}/{max_retries}): {session_error}")
+            logger.warning(f"⚠️ Fresh session creation failed (attempt {retry_count}/{max_retries}): {session_error}")
             
             if retry_count >= max_retries:
-                logger.error("❌ CRITICAL: All session creation attempts failed")
-                raise Exception(f"Failed to create database session after {max_retries} attempts: {session_error}")
+                logger.error("❌ CRITICAL: All fresh session attempts failed")
+                raise Exception(f"Failed to create fresh session after {max_retries} attempts: {session_error}")
             
-            # Wait before retry with exponential backoff
-            await asyncio.sleep(0.5 * (2 ** retry_count))
+            # Brief wait before retry
+            await asyncio.sleep(1)
     
-    raise Exception("Resilient session creation failed - this should never be reached")
+    raise Exception("Fresh session creation failed - this should never be reached")
