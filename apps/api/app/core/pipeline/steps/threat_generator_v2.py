@@ -562,6 +562,9 @@ class ThreatGeneratorV2:
                 if not component_threats:
                     continue
                 
+                # Get component type for this component
+                component_type = component.get('type', 'process')
+                
                 # Step 3: Calculate residual risk for each threat
                 enhanced_threats = []
                 for threat in component_threats:

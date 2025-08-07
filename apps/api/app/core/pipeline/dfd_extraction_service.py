@@ -109,7 +109,8 @@ async def extract_dfd_from_text(
             except ImportError:
                 logger.warning("Instructor library not available, falling back to standard extraction")
             except Exception as e:
-                logger.warning(f"Instructor extraction failed: {e}, falling back to standard extraction")
+                logger.info(f"Instructor extraction not available with {llm_provider.__class__.__name__}: {e}")
+                logger.info("Using standard LLM provider interface for DFD extraction")
         
         # Fallback to standard LLM call with JSON parsing
         response = await llm_provider.generate(

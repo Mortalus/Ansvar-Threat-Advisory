@@ -154,9 +154,7 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     exploitability: "High",
     estimated_effort: "Days",
     assessment_reasoning: "Critical risk due to high likelihood and catastrophic business impact. Database contains PII and financial data making this a prime target.",
-    primary_mitigation: "Immediately implement parameterized queries across all database interactions, deploy a Web Application Firewall with SQL injection detection, and conduct emergency code review of all user input handling.",
-    business_enhancement_method: "llm_enhanced",
-    risk_assessment_method: "batch_llm"
+    primary_mitigation: "Immediately implement parameterized queries across all database interactions, deploy a Web Application Firewall with SQL injection detection, and conduct emergency code review of all user input handling."
   },
   {
     ...SAMPLE_THREATS[2], // Payment Data Exposure
@@ -170,8 +168,6 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     estimated_effort: "Weeks",
     assessment_reasoning: "Critical business risk due to PCI compliance requirements. Any payment data exposure could shut down payment processing immediately.",
     primary_mitigation: "Implement end-to-end encryption for all payment data, deploy tokenization for stored payment information, and establish secure key management with HSMs.",
-    business_enhancement_method: "llm_enhanced",
-    risk_assessment_method: "batch_llm"
   },
   {
     ...SAMPLE_THREATS[0], // Session Hijacking
@@ -185,8 +181,6 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     estimated_effort: "Days", 
     assessment_reasoning: "High risk due to direct impact on customer accounts and relatively common attack vector in e-commerce platforms.",
     primary_mitigation: "Deploy secure session management with HttpOnly/Secure cookies, implement session rotation on privilege changes, and add real-time session monitoring.",
-    business_enhancement_method: "llm_enhanced",
-    risk_assessment_method: "batch_llm"
   },
   {
     ...SAMPLE_THREATS[4], // Admin Privilege Escalation
@@ -199,9 +193,7 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     exploitability: "Low",
     estimated_effort: "Weeks",
     assessment_reasoning: "High impact but lower likelihood. Administrative access compromise would be catastrophic but requires sophisticated attack.",
-    primary_mitigation: "Enforce strict role-based access controls, implement mandatory multi-factor authentication for all admin accounts, and deploy privileged access management (PAM) solutions.",
-    business_enhancement_method: "llm_enhanced", 
-    risk_assessment_method: "batch_llm"
+    primary_mitigation: "Enforce strict role-based access controls, implement mandatory multi-factor authentication for all admin accounts, and deploy privileged access management (PAM) solutions."
   },
   {
     ...SAMPLE_THREATS[3], // API DoS
@@ -215,8 +207,6 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     estimated_effort: "Days",
     assessment_reasoning: "Medium risk with direct revenue impact but multiple mitigation options available. Availability critical for e-commerce.",
     primary_mitigation: "Deploy robust API rate limiting with sliding windows, implement DDoS protection services, and establish auto-scaling capabilities for traffic spikes.",
-    business_enhancement_method: "llm_enhanced",
-    risk_assessment_method: "batch_llm"
   },
   {
     ...SAMPLE_THREATS[5], // Log Tampering
@@ -230,8 +220,6 @@ export const SAMPLE_REFINED_THREATS: RefinedThreat[] = [
     estimated_effort: "Weeks",
     assessment_reasoning: "Medium risk focused on compliance and audit integrity. Lower likelihood but important for regulatory requirements.",
     primary_mitigation: "Implement tamper-evident logging with cryptographic signatures, deploy centralized log management with immutable storage, and establish log integrity monitoring.",
-    business_enhancement_method: "llm_enhanced",
-    risk_assessment_method: "batch_llm"
   }
 ]
 

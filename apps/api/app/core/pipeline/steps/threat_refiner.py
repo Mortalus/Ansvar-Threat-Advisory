@@ -183,13 +183,31 @@ For each threat, provide:
 """
             
             llm_provider = await get_llm_provider("threat_refinement")
-            response = await llm_provider.generate_text(batch_prompt)
+            logger.debug(f"Risk assessment prompt length: {len(batch_prompt)} characters")
+            llm_response = await llm_provider.generate(batch_prompt)
+            response = llm_response.content
             
             # Parse response and apply to threats
             enhanced_threats = []
             
             try:
-                risk_assessments = json.loads(response.strip())
+                response_text = response.strip()
+                
+                # Clean up common LLM response issues
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                # Log the response for debugging
+                logger.debug(f"LLM risk assessment response: {response_text[:200]}...")
+                
+                if not response_text:
+                    logger.warning("LLM returned empty response for risk assessment")
+                    raise json.JSONDecodeError("Empty response", "", 0)
+                
+                risk_assessments = json.loads(response_text)
                 
                 for idx, threat in enumerate(threats):
                     enhanced_threat = threat.copy()
@@ -276,10 +294,28 @@ Return JSON array with business statements:
 """
             
             llm_provider = await get_llm_provider("threat_refinement")
-            response = await llm_provider.generate_text(business_prompt)
+            logger.debug(f"Business statements prompt length: {len(business_prompt)} characters")
+            llm_response = await llm_provider.generate(business_prompt)
+            response = llm_response.content
             
             try:
-                business_statements = json.loads(response.strip())
+                response_text = response.strip()
+                
+                # Clean up common LLM response issues
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                # Log the response for debugging
+                logger.debug(f"LLM business statements response: {response_text[:200]}...")
+                
+                if not response_text:
+                    logger.warning("LLM returned empty response for business statements")
+                    raise json.JSONDecodeError("Empty response", "", 0)
+                
+                business_statements = json.loads(response_text)
                 
                 # Apply business statements to critical threats
                 enhanced_threats = []

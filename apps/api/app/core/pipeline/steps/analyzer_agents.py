@@ -14,6 +14,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from abc import ABC, abstractmethod
+from app.core.llm import get_llm_provider
 
 logger = logging.getLogger(__name__)
 
@@ -118,40 +119,169 @@ class ArchitecturalRiskAgent(BaseAnalyzerAgent):
         dfd_components: Dict[str, Any],
         existing_threats: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Analyze for architectural risks."""
-        findings = []
+        """LLM-powered architectural risk analysis."""
+        logger.info("🏗️ Starting LLM-powered architectural risk analysis...")
         
-        # 1. Check for architectural anti-patterns in document
-        for pattern_name, keywords in self.anti_patterns.items():
-            for keyword in keywords:
-                if keyword in document_text.lower():
-                    context = self._extract_context(document_text, keyword)
-                    
-                    finding = {
-                        'agent': self.name,
-                        'type': 'Architectural Risk',
-                        'pattern': pattern_name,
-                        'severity': self._assess_pattern_severity(pattern_name),
-                        'finding': f"Detected {pattern_name.replace('_', ' ')}: {keyword}",
-                        'context': context,
-                        'recommendation': self._get_pattern_recommendation(pattern_name)
-                    }
-                    findings.append(finding)
-                    logger.info(f"Architectural Risk Agent found: {pattern_name}")
+        try:
+            # Get LLM provider
+            llm_provider = await get_llm_provider("threat_generation")
+            
+            # Prepare components summary
+            components_summary = self._prepare_components_summary(dfd_components)
+            existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
+            
+            # Create architectural analysis prompt
+            architectural_prompt = f"""You are an expert Enterprise Architect and Security Professional specializing in identifying systemic architectural vulnerabilities that traditional security scans miss.
+
+SYSTEM DOCUMENTATION:
+{document_text[:3000]}  
+
+COMPONENTS IDENTIFIED:
+{components_summary}
+
+EXISTING TECHNICAL THREATS:
+{existing_threats_summary}
+
+MISSION: Identify architectural threats that create systemic risk - these are foundational flaws that enable multiple attack vectors and create cascading failures.
+
+FOCUS AREAS:
+- Single points of failure that could paralyze operations
+- Architectural anti-patterns that create security blind spots  
+- Missing defense-in-depth layers
+- Scalability bottlenecks that enable DoS attacks
+- Data flow vulnerabilities that bypass security controls
+- Insecure architectural patterns (tight coupling, shared resources)
+- Missing resilience patterns (circuit breakers, failover)
+
+OUTPUT FORMAT (JSON array):
+[
+  {{
+    "threat_id": "ARCH_001",
+    "threat_name": "Specific architectural threat name",
+    "component_name": "Affected architectural component",
+    "component_type": "architecture", 
+    "stride_category": "Most relevant STRIDE category",
+    "threat_description": "Detailed description of the systemic risk and how it enables attacks",
+    "potential_impact": "Critical|High|Medium|Low",
+    "likelihood": "High|Medium|Low",
+    "attack_vector": "How attackers would exploit this architectural flaw",
+    "business_impact": "Operational/financial impact of exploitation",
+    "mitigation_strategy": "Architectural changes needed to address the systemic risk",
+    "agent_source": "Architectural Risk Agent",
+    "risk_type": "Architectural"
+  }}
+]
+
+Generate 3-7 HIGH-QUALITY architectural threats. Focus on systemic risks that could enable multiple attack paths or cause cascading failures."""
+
+            # Generate LLM analysis
+            logger.info("🔮 Calling LLM for architectural analysis...")
+            llm_response = await llm_provider.generate(
+                architectural_prompt,
+                temperature=0.3,  # Lower temperature for more focused analysis
+                max_tokens=2000
+            )
+            
+            # Parse LLM response
+            threats = self._parse_llm_threats(llm_response.content)
+            
+            logger.info(f"🏗️ Architectural Risk Agent generated {len(threats)} LLM-powered threats")
+            return threats
+            
+        except Exception as e:
+            logger.error(f"❌ Architectural Risk Agent LLM analysis failed: {e}")
+            # Fallback to simplified rule-based analysis
+            return self._fallback_analysis(dfd_components)
+    
+    def _prepare_components_summary(self, dfd_components: Dict[str, Any]) -> str:
+        """Prepare a concise components summary for the LLM."""
+        summary = []
         
-        # 2. Analyze component architecture
-        findings.extend(self._analyze_component_architecture(dfd_components))
+        if 'external_entities' in dfd_components:
+            summary.append(f"External Entities: {', '.join(dfd_components['external_entities'][:5])}")
+        if 'processes' in dfd_components:
+            processes = dfd_components['processes'][:8]  # Limit for token efficiency
+            process_names = [p if isinstance(p, str) else p.get('name', 'Unknown') for p in processes]
+            summary.append(f"Processes: {', '.join(process_names)}")
+        if 'assets' in dfd_components:
+            summary.append(f"Data Assets: {', '.join(dfd_components['assets'][:5])}")
+        if 'data_flows' in dfd_components:
+            summary.append(f"Data Flows: {len(dfd_components['data_flows'])} connections")
+            
+        return '\n'.join(summary)
+    
+    def _prepare_existing_threats_summary(self, existing_threats: List[Dict[str, Any]]) -> str:
+        """Prepare summary of existing threats to avoid duplication."""
+        if not existing_threats:
+            return "No existing threats provided"
+            
+        threat_categories = {}
+        for threat in existing_threats[:10]:  # Limit for efficiency
+            category = threat.get('stride_category', 'Unknown')
+            threat_categories[category] = threat_categories.get(category, 0) + 1
+            
+        return f"Existing threats by STRIDE: {', '.join([f'{k}:{v}' for k,v in threat_categories.items()])}"
+    
+    def _parse_llm_threats(self, llm_content: str) -> List[Dict[str, Any]]:
+        """Parse LLM response into structured threats."""
+        try:
+            # Clean up the response
+            content = llm_content.strip()
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            # Parse JSON
+            threats = json.loads(content)
+            
+            if not isinstance(threats, list):
+                logger.warning("LLM returned non-list response, wrapping in list")
+                threats = [threats]
+                
+            # Validate and clean threats
+            valid_threats = []
+            for threat in threats:
+                if isinstance(threat, dict) and 'threat_name' in threat:
+                    # Ensure required fields
+                    threat.setdefault('component_name', 'System Architecture')
+                    threat.setdefault('component_type', 'architecture')
+                    threat.setdefault('agent_source', 'Architectural Risk Agent')
+                    threat.setdefault('stride_category', 'T')
+                    valid_threats.append(threat)
+            
+            return valid_threats
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.error(f"LLM content: {llm_content[:500]}...")
+            return []
+        except Exception as e:
+            logger.error(f"Error processing LLM threats: {e}")
+            return []
+    
+    def _fallback_analysis(self, dfd_components: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Simple fallback if LLM fails."""
+        logger.info("🔄 Using fallback rule-based analysis")
+        fallback_threats = []
         
-        # 3. Check for missing architectural components
-        findings.extend(self._check_missing_components(dfd_components))
+        # Simple check for single points of failure
+        processes = dfd_components.get('processes', [])
+        if len(processes) < 3:
+            fallback_threats.append({
+                'threat_id': 'ARCH_FALLBACK_001',
+                'threat_name': 'Insufficient System Redundancy',
+                'component_name': 'System Architecture',
+                'component_type': 'architecture',
+                'stride_category': 'D',
+                'threat_description': 'System has insufficient redundancy and may be vulnerable to single points of failure',
+                'potential_impact': 'High',
+                'likelihood': 'Medium',
+                'agent_source': 'Architectural Risk Agent'
+            })
         
-        # 4. Analyze data flow patterns
-        findings.extend(self._analyze_data_flow_patterns(dfd_components))
-        
-        # Convert findings to threats
-        threats = self._convert_findings_to_threats(findings)
-        
-        return threats
+        return fallback_threats
     
     def _analyze_component_architecture(self, dfd_components: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Analyze component structure for architectural issues."""
@@ -365,20 +495,110 @@ class BusinessFinancialRiskAgent(BaseAnalyzerAgent):
         dfd_components: Dict[str, Any],
         existing_threats: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Analyze for business and financial risks."""
-        findings = []
+        """LLM-powered business and financial risk analysis."""
+        logger.info("💼 Starting LLM-powered business & financial risk analysis...")
         
-        # 1. Extract business metrics from document
-        business_metrics = self._extract_business_metrics(document_text)
+        try:
+            # Get LLM provider
+            llm_provider = await get_llm_provider("threat_generation")
+            
+            # Prepare business context summary
+            components_summary = self._prepare_components_summary(dfd_components)
+            existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
+            
+            # Create business risk analysis prompt
+            business_prompt = f"""You are a Chief Risk Officer and Business Continuity Expert with deep expertise in quantifying cybersecurity threats' impact on business operations and financial performance.
+
+SYSTEM DOCUMENTATION:
+{document_text[:3000]}
+
+SYSTEM COMPONENTS:
+{components_summary}
+
+EXISTING TECHNICAL THREATS:
+{existing_threats_summary}
+
+MISSION: Identify business and financial risks that could result from cybersecurity incidents. Focus on operational disruption, financial loss, regulatory consequences, and competitive damage.
+
+FOCUS AREAS:
+- Revenue-generating processes vulnerable to cyber disruption
+- Customer-facing systems whose compromise would damage trust/retention
+- Operational processes whose failure would create cascading business impact
+- Compliance/regulatory exposure from data breaches or system failures
+- Supply chain dependencies vulnerable to cyber disruption
+- Financial systems and processes at risk of fraud or manipulation
+- Intellectual property and competitive advantage threats
+
+OUTPUT FORMAT (JSON array):
+[
+  {{
+    "threat_id": "BIZ_001",
+    "threat_name": "Specific business risk name",
+    "component_name": "Business process or system affected",
+    "component_type": "business",
+    "stride_category": "Most relevant STRIDE category",
+    "threat_description": "How cyber threats could disrupt this business function",
+    "potential_impact": "Critical|High|Medium|Low",
+    "likelihood": "High|Medium|Low", 
+    "business_impact": "Quantified operational and financial consequences",
+    "financial_impact_range": "Estimated cost range (e.g., $100K - $2M)",
+    "downtime_cost": "Cost per hour/day of disruption if quantifiable",
+    "regulatory_exposure": "Potential fines, compliance violations",
+    "customer_impact": "Effect on customer trust, retention, acquisition",
+    "mitigation_strategy": "Business-focused risk mitigation approach",
+    "agent_source": "Business & Financial Risk Agent",
+    "risk_type": "Business Impact"
+  }}
+]
+
+Generate 2-5 HIGH-IMPACT business risks. Focus on threats that would cause significant financial loss, operational disruption, or competitive damage."""
+
+            # Generate LLM analysis
+            logger.info("🔮 Calling LLM for business impact analysis...")
+            llm_response = await llm_provider.generate(
+                business_prompt,
+                temperature=0.4,  # Slightly higher for creative business impact scenarios
+                max_tokens=2000
+            )
+            
+            # Parse LLM response
+            threats = self._parse_llm_threats(llm_response.content)
+            
+            logger.info(f"💼 Business & Financial Risk Agent generated {len(threats)} LLM-powered threats")
+            return threats
+            
+        except Exception as e:
+            logger.error(f"❌ Business & Financial Risk Agent LLM analysis failed: {e}")
+            # Fallback to simplified analysis
+            return self._fallback_business_analysis(dfd_components)
+    
+    def _fallback_business_analysis(self, dfd_components: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Simple fallback if LLM fails."""
+        logger.info("🔄 Using fallback business analysis")
+        fallback_threats = []
         
-        # 2. Analyze critical business processes
-        findings.extend(self._analyze_business_critical_components(dfd_components, business_metrics))
+        # Simple check for customer-facing systems
+        processes = dfd_components.get('processes', [])
+        customer_facing = ['portal', 'api', 'web', 'mobile', 'customer']
         
-        # 3. Calculate financial impact of threats
-        findings.extend(self._calculate_threat_financial_impact(existing_threats, business_metrics))
+        for process in processes[:5]:  # Limit for efficiency
+            process_name = process if isinstance(process, str) else process.get('name', '')
+            if any(keyword in process_name.lower() for keyword in customer_facing):
+                fallback_threats.append({
+                    'threat_id': 'BIZ_FALLBACK_001', 
+                    'threat_name': 'Customer Service Disruption Risk',
+                    'component_name': process_name,
+                    'component_type': 'business',
+                    'stride_category': 'D',
+                    'threat_description': f'Disruption to {process_name} could impact customer experience and revenue',
+                    'potential_impact': 'High',
+                    'likelihood': 'Medium',
+                    'business_impact': 'Customer dissatisfaction, potential revenue loss',
+                    'agent_source': 'Business & Financial Risk Agent'
+                })
+                break
         
-        # 4. Identify business continuity risks
-        findings.extend(self._analyze_business_continuity(dfd_components, business_metrics))
+        return fallback_threats
         
         # 5. Assess customer impact
         findings.extend(self._assess_customer_impact(dfd_components, business_metrics))
@@ -728,25 +948,174 @@ class ComplianceGovernanceAgent(BaseAnalyzerAgent):
         dfd_components: Dict[str, Any],
         existing_threats: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Analyze for compliance and governance risks."""
+        """LLM-powered compliance and governance analysis."""
+        logger.info("⚖️ Starting LLM-powered compliance & governance analysis...")
+        
+        try:
+            # Get LLM provider
+            llm_provider = await get_llm_provider("threat_generation")
+            
+            # Prepare components and context
+            components_summary = self._prepare_components_summary(dfd_components)
+            existing_threats_summary = self._prepare_existing_threats_summary(existing_threats)
+            
+            # Create compliance analysis prompt
+            compliance_prompt = f"""You are a Chief Compliance Officer and Regulatory Audit Expert with deep expertise in cybersecurity compliance frameworks (GDPR, PCI-DSS, HIPAA, SOX, ISO 27001) and governance standards.
+
+SYSTEM DOCUMENTATION:
+{document_text[:3000]}
+
+SYSTEM COMPONENTS:
+{components_summary}
+
+EXISTING TECHNICAL THREATS:
+{existing_threats_summary}
+
+MISSION: Identify compliance violations and governance gaps that could result in regulatory penalties, failed audits, or legal liability. Think like an external auditor examining this system.
+
+FOCUS AREAS:
+- Data protection violations (GDPR, HIPAA, PCI-DSS non-compliance)
+- Missing audit trails and logging for regulated data
+- Insufficient access controls for sensitive information
+- Lack of data retention/deletion policies
+- Missing business continuity planning for regulated systems
+- Inadequate change management and version control
+- Absence of regular security testing and assessments
+- Governance control gaps that auditors would flag
+
+REGULATORY FRAMEWORKS TO CONSIDER:
+- GDPR: EU data protection, consent, right to erasure
+- PCI-DSS: Payment card data security standards
+- HIPAA: Healthcare information protection
+- SOX: Financial reporting controls and audit trails
+- ISO 27001: Information security management systems
+
+OUTPUT FORMAT (JSON array):
+[
+  {{
+    "threat_id": "COMP_001",
+    "threat_name": "Specific compliance violation or governance gap",
+    "component_name": "System component or process affected",
+    "component_type": "compliance",
+    "stride_category": "Most relevant STRIDE category",
+    "threat_description": "Detailed description of the compliance risk and potential violations",
+    "potential_impact": "Critical|High|Medium|Low",
+    "likelihood": "High|Medium|Low",
+    "regulatory_framework": "Primary framework violated (GDPR, PCI-DSS, HIPAA, SOX, ISO27001)",
+    "potential_penalties": "Regulatory fines or audit findings this could cause",
+    "audit_findings": "What an auditor would flag about this issue",
+    "mitigation_strategy": "Specific compliance controls and governance measures needed",
+    "agent_source": "Compliance & Governance Agent",
+    "risk_type": "Compliance Violation"
+  }}
+]
+
+Generate 2-5 HIGH-PRIORITY compliance threats. Focus on violations that would trigger regulatory action or cause audit failures."""
+
+            # Generate LLM analysis
+            logger.info("🔮 Calling LLM for compliance analysis...")
+            llm_response = await llm_provider.generate(
+                compliance_prompt,
+                temperature=0.2,  # Lower temperature for more precise compliance analysis
+                max_tokens=2000
+            )
+            
+            # Parse LLM response
+            threats = self._parse_llm_threats(llm_response.content)
+            
+            logger.info(f"⚖️ Compliance & Governance Agent generated {len(threats)} LLM-powered threats")
+            return threats
+            
+        except Exception as e:
+            logger.error(f"❌ Compliance & Governance Agent LLM analysis failed: {e}")
+            # Fallback to simplified rule-based analysis
+            return self._fallback_compliance_analysis(document_text, dfd_components)
+    
+    def _prepare_components_summary(self, dfd_components: Dict[str, Any]) -> str:
+        """Prepare a concise components summary for the LLM."""
+        summary = []
+        
+        if 'external_entities' in dfd_components:
+            summary.append(f"External Entities: {', '.join(dfd_components['external_entities'][:5])}")
+        if 'processes' in dfd_components:
+            processes = dfd_components['processes'][:8]
+            process_names = [p if isinstance(p, str) else p.get('name', 'Unknown') for p in processes]
+            summary.append(f"Processes: {', '.join(process_names)}")
+        if 'data_stores' in dfd_components:
+            stores = dfd_components['data_stores'][:5]
+            store_names = [s if isinstance(s, str) else s.get('name', 'Unknown') for s in stores]
+            summary.append(f"Data Stores: {', '.join(store_names)}")
+        if 'data_flows' in dfd_components:
+            summary.append(f"Data Flows: {len(dfd_components['data_flows'])} connections")
+            
+        return '\n'.join(summary)
+    
+    def _prepare_existing_threats_summary(self, existing_threats: List[Dict[str, Any]]) -> str:
+        """Prepare summary of existing threats to avoid duplication."""
+        if not existing_threats:
+            return "No existing threats provided"
+            
+        threat_categories = {}
+        for threat in existing_threats[:10]:  # Limit for efficiency
+            category = threat.get('stride_category', 'Unknown')
+            threat_categories[category] = threat_categories.get(category, 0) + 1
+            
+        return f"Existing threats by STRIDE: {', '.join([f'{k}:{v}' for k,v in threat_categories.items()])}"
+    
+    def _parse_llm_threats(self, llm_content: str) -> List[Dict[str, Any]]:
+        """Parse LLM response into structured threats."""
+        try:
+            # Clean up the response
+            content = llm_content.strip()
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            # Parse JSON
+            threats = json.loads(content)
+            
+            if not isinstance(threats, list):
+                logger.warning("LLM returned non-list response, wrapping in list")
+                threats = [threats]
+                
+            # Validate and clean threats
+            valid_threats = []
+            for threat in threats:
+                if isinstance(threat, dict) and 'threat_name' in threat:
+                    # Ensure required fields
+                    threat.setdefault('component_name', 'Governance & Compliance')
+                    threat.setdefault('component_type', 'compliance')
+                    threat.setdefault('agent_source', 'Compliance & Governance Agent')
+                    threat.setdefault('stride_category', 'I')
+                    valid_threats.append(threat)
+            
+            return valid_threats
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.error(f"LLM content: {llm_content[:500]}...")
+            return []
+        except Exception as e:
+            logger.error(f"Error processing LLM threats: {e}")
+            return []
+    
+    def _fallback_compliance_analysis(self, document_text: str, dfd_components: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Simple fallback if LLM fails."""
+        logger.info("🔄 Using fallback rule-based compliance analysis")
         findings = []
         
         # 1. Identify applicable compliance frameworks
         applicable_frameworks = self._identify_compliance_requirements(document_text)
         
-        # 2. Check compliance implementation
+        # 2. Check basic compliance gaps
         findings.extend(self._check_compliance_implementation(
             document_text, dfd_components, applicable_frameworks
         ))
         
-        # 3. Analyze governance controls
+        # 3. Check for basic governance controls
         findings.extend(self._analyze_governance_controls(document_text, dfd_components))
-        
-        # 4. Check data handling compliance
-        findings.extend(self._check_data_handling_compliance(dfd_components, applicable_frameworks))
-        
-        # 5. Assess audit readiness
-        findings.extend(self._assess_audit_readiness(document_text, dfd_components))
         
         # Convert to threats
         threats = self._convert_findings_to_threats(findings, applicable_frameworks)

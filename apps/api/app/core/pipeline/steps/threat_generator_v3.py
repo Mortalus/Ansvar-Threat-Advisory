@@ -85,8 +85,12 @@ class ThreatGeneratorV3:
             
             # Step 2: Run multi-agent analysis
             logger.info("Phase 2: Multi-agent specialized analysis")
-            
+            logger.info(f"📄 Document text available: {document_text is not None}")
             if document_text:
+                logger.info(f"📝 Document text length: {len(document_text)} characters")
+            
+            if document_text and len(document_text.strip()) > 50:
+                logger.info("🤖 Starting multi-agent analysis with 3 specialized agents...")
                 agent_results = await self.agent_orchestrator.analyze_system(
                     document_text=document_text,
                     dfd_components=component_data,
@@ -97,10 +101,12 @@ class ThreatGeneratorV3:
                 business_risks = agent_results.get('business_risks', [])
                 compliance_risks = agent_results.get('compliance_risks', [])
                 
-                logger.info(f"Agents found: {len(architectural_risks)} architectural, "
-                          f"{len(business_risks)} business, {len(compliance_risks)} compliance risks")
+                logger.info(f"🏗️ Architectural agent found: {len(architectural_risks)} risks")
+                logger.info(f"💼 Business agent found: {len(business_risks)} risks") 
+                logger.info(f"⚖️ Compliance agent found: {len(compliance_risks)} risks")
             else:
-                logger.warning("No document text provided, skipping multi-agent analysis")
+                logger.warning("⚠️ No sufficient document text provided, skipping multi-agent analysis")
+                logger.warning("💡 Multi-agent analysis requires document text for comprehensive threat modeling")
                 architectural_risks = []
                 business_risks = []
                 compliance_risks = []
@@ -156,6 +162,7 @@ class ThreatGeneratorV3:
                 
                 # Metadata
                 "components_analyzed": v2_results.get('components_analyzed', 0),
+                "knowledge_sources_used": v2_results.get('knowledge_sources_used', []),
                 "analysis_version": "3.0",
                 "analysis_methods": ["context_aware", "multi_agent", "holistic"]
             }

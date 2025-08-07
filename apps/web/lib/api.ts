@@ -250,7 +250,7 @@ async function quickRefineThreats(): Promise<ThreatRefinementResponse> {
   return response.json()
 }
 
-async function getSampleDFD(): Promise<any> {
+async function getDebugSampleDFD(): Promise<any> {
   const response = await fetch(`${API_URL}/api/debug/sample-dfd`)
   
   if (!response.ok) {
@@ -436,6 +436,6 @@ export const api = {
   
   // Debug functions
   quickRefineThreats,
-  getSampleDFD,
+  getDebugSampleDFD,
   getSampleThreats,
 }

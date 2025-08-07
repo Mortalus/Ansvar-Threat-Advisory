@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from app.database import AsyncSessionLocal
 from app.services.ingestion_service import IngestionService
 from app.services.prompt_service import PromptService
-from app.core.pipeline.steps.threat_generator import ThreatGenerator
+from app.core.pipeline.manager import PipelineManager, PipelineStep
 from app.models.pipeline import PipelineStepResult
 from app.startup import initialize_default_data
 
@@ -91,52 +91,78 @@ async def test_threat_generation():
         ]
     }
     
-    print(f"\n🎯 Testing threat generation for {len(component_data['processes']) + len(component_data['data_stores'])} components...")
+    print(f"\n🎯 Testing threat generation using PIPELINE MANAGER (with hardcoded V3)...")
     
-    async with AsyncSessionLocal() as session:
-        # Create a mock pipeline step result
-        step_result = PipelineStepResult(
-            result_type="threats",
-            result_data={},
-            step_id=1  # Mock step ID
+    try:
+        # Create pipeline manager
+        pipeline_manager = PipelineManager()
+        
+        # Create a new pipeline
+        pipeline_id = await pipeline_manager.create_pipeline(
+            name="Test Threat Generation",
+            description="Testing V3 threat generation through pipeline manager"
         )
-        session.add(step_result)
-        await session.commit()
-        await session.refresh(step_result)
+        print(f"✅ Created pipeline: {pipeline_id}")
         
-        # Test the threat generator
-        threat_generator = ThreatGenerator()
+        # Upload document step (required)
+        upload_result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DOCUMENT_UPLOAD,
+            data={"document_text": "Test document for threat analysis"}
+        )
+        print("✅ Document upload completed")
         
-        try:
-            result = await threat_generator.execute(
-                db_session=session,
-                pipeline_step_result=step_result,
-                component_data=component_data
-            )
-            
-            print(f"✅ Threat generation completed successfully!")
-            print(f"   📊 Total threats: {result.get('total_count', 0)}")
-            print(f"   🔍 Components analyzed: {result.get('components_analyzed', 0)}")
-            print(f"   📚 Knowledge sources: {result.get('knowledge_sources_used', [])}")
-            
-            # Show example threats
-            threats = result.get("threats", [])
-            if threats:
-                print(f"\n🔥 Example threats generated:")
-                for i, threat in enumerate(threats[:3], 1):  # Show first 3
-                    print(f"   {i}. Component: {threat.get('component_name', 'Unknown')}")
-                    print(f"      Category: {threat.get('Threat Category', 'Unknown')}")
-                    print(f"      Name: {threat.get('Threat Name', 'Unknown')}")
-                    print(f"      Description: {threat.get('Description', 'No description')[:100]}...")
-                    print()
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Threat generation failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+        # DFD extraction step (required) 
+        dfd_result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DFD_EXTRACTION,
+            data={
+                "document_text": "Test document for DFD extraction",
+                "use_enhanced_extraction": False  # Use basic for testing
+            }
+        )
+        print("✅ DFD extraction completed")
+        
+        # DFD review step (required before threat generation)
+        review_result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.DFD_REVIEW,
+            data={"dfd_components": component_data}
+        )
+        print("✅ DFD review completed")
+        
+        # NOW test threat generation through pipeline manager (will use hardcoded V3)
+        print(f"\n🚀 Executing V3 threat generation through pipeline manager...")
+        
+        result = await pipeline_manager.execute_step(
+            pipeline_id=pipeline_id,
+            step=PipelineStep.THREAT_GENERATION,
+            data={}  # Empty data - V3 is hardcoded
+        )
+        
+        print(f"✅ V3 Threat generation completed successfully!")
+        print(f"   📊 Total threats: {result.get('total_count', 0)}")
+        print(f"   🔍 Components analyzed: {result.get('components_analyzed', 0)}")
+        print(f"   📚 Knowledge sources: {result.get('knowledge_sources_used', [])}")
+        
+        # Show example threats
+        threats = result.get("threats", [])
+        if threats:
+            print(f"\n🔥 Example V3 threats generated:")
+            for i, threat in enumerate(threats[:3], 1):  # Show first 3
+                print(f"   {i}. Component: {threat.get('component_name', 'Unknown')}")
+                print(f"      Category: {threat.get('Threat Category', 'Unknown')}")
+                print(f"      Name: {threat.get('Threat Name', 'Unknown')}")
+                print(f"      Description: {threat.get('Description', 'No description')[:100]}...")
+                print()
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Pipeline-based threat generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 async def test_knowledge_search():
     """Test the knowledge base search functionality."""
