@@ -12,7 +12,7 @@ from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
 from app.models.dfd import DFDComponents
 from app.models import Pipeline, PipelineStep as PipelineStepModel, PipelineStatus, StepStatus
 from app.services import PipelineService
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, get_resilient_session_with_recovery
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,13 @@ class PipelineManager:
         self.llm_provider = None
     
     async def _get_session(self) -> AsyncSession:
-        """Get database session"""
+        """Get bulletproof database session with automatic recovery"""
         if self.session:
             return self.session
         else:
-            return AsyncSessionLocal()
+            # Use bulletproof session creation with automatic recovery
+            logger.debug("🔄 PipelineManager creating resilient database session")
+            return await get_resilient_session_with_recovery()
     
     async def _get_service(self, session: Optional[AsyncSession] = None) -> PipelineService:
         """Get pipeline service with session"""

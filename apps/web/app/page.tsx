@@ -202,8 +202,9 @@ function HomePageContent() {
       console.log('📂 Loading session:', sessionId, 'in project:', projectId)
       setLoading(true)
       
-      // Load session details
-      const sessionResponse = await fetch(`/api/projects/sessions/${sessionId}`)
+      // Load session details from backend API
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+      const sessionResponse = await fetch(`${apiBaseUrl}/api/projects/sessions/${sessionId}`)
       if (!sessionResponse.ok) {
         throw new Error('Failed to load session')
       }
@@ -222,8 +223,32 @@ function HomePageContent() {
       // If session has a pipeline, load its state
       if (sessionData.pipeline_id) {
         console.log('🔄 Loading pipeline state:', sessionData.pipeline_id)
-        // Load pipeline state and update store
-        // This would integrate with existing pipeline loading logic
+        
+        // Set the pipeline ID in the store
+        setPipelineId(sessionData.pipeline_id)
+        
+        // Load the pipeline status from the backend
+        try {
+          const pipelineResponse = await fetch(`${apiBaseUrl}/api/documents/${sessionData.pipeline_id}/status`)
+          if (pipelineResponse.ok) {
+            const pipelineData = await pipelineResponse.json()
+            console.log('✅ Pipeline status loaded:', pipelineData)
+            
+            // Update the UI with the pipeline state
+            updateFromPipelineStatus(pipelineData)
+            
+            // If there's uploaded content, set it
+            if (pipelineData.document_text) {
+              setDocumentText(pipelineData.document_text)
+            }
+            
+            // Show that we're resuming a session
+            setUploadError(null)
+            console.log('✅ Session resumed successfully')
+          }
+        } catch (error) {
+          console.error('⚠️ Could not load pipeline state:', error)
+        }
       }
       
     } catch (error) {
@@ -948,14 +973,123 @@ function HomePageContent() {
             {stepStates.data_extraction.status === 'complete' && (
               <div className="flex-1 overflow-auto">
                 <div className="space-y-6">
-                  <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
-                    <p className="text-blue-300 mb-2">
-                      📝 This is where you can review and edit the extracted security data.
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                      Full editing interface coming soon. For now, you can proceed to DFD extraction.
-                    </p>
-                  </div>
+                  {stepStates.data_extraction.result && (
+                    <>
+                      {/* Quality Metrics */}
+                      <div className="card-bg rounded-xl p-6">
+                        <h3 className="text-lg font-semibold mb-4">Extraction Quality</h3>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <div className="text-2xl font-bold text-green-400">
+                              {stepStates.data_extraction.result.quality_score ? 
+                                (stepStates.data_extraction.result.quality_score * 100).toFixed(1) + '%' : 
+                                'N/A'}
+                            </div>
+                            <div className="text-sm text-gray-400">Quality Score</div>
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold text-blue-400">
+                              {stepStates.data_extraction.result.extraction_metadata?.passes_performed?.length || 0}
+                            </div>
+                            <div className="text-sm text-gray-400">Analysis Passes</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Assets */}
+                      {stepStates.data_extraction.result.extracted_security_data?.security_assets && (
+                        <div className="card-bg rounded-xl p-6">
+                          <h3 className="text-lg font-semibold mb-4">Security Assets ({stepStates.data_extraction.result.extracted_security_data.security_assets.length})</h3>
+                          <div className="space-y-3">
+                            {stepStates.data_extraction.result.extracted_security_data.security_assets.slice(0, 5).map((asset: any, index: number) => (
+                              <div key={index} className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="font-medium text-purple-300">{asset.name}</span>
+                                    <span className="ml-2 text-sm text-gray-400">({asset.type})</span>
+                                  </div>
+                                  <span className={`px-2 py-1 text-xs rounded ${
+                                    asset.sensitivity === 'Restricted' ? 'bg-red-500/20 text-red-300' :
+                                    asset.sensitivity === 'Confidential' ? 'bg-orange-500/20 text-orange-300' :
+                                    asset.sensitivity === 'Internal' ? 'bg-yellow-500/20 text-yellow-300' :
+                                    'bg-green-500/20 text-green-300'
+                                  }`}>
+                                    {asset.sensitivity}
+                                  </span>
+                                </div>
+                                {asset.data_types && asset.data_types.length > 0 && (
+                                  <div className="mt-2 text-sm text-gray-400">
+                                    Data: {asset.data_types.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {stepStates.data_extraction.result.extracted_security_data.security_assets.length > 5 && (
+                              <div className="text-center text-sm text-gray-400">
+                                ... and {stepStates.data_extraction.result.extracted_security_data.security_assets.length - 5} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Data Flows */}
+                      {stepStates.data_extraction.result.extracted_security_data?.security_data_flows && (
+                        <div className="card-bg rounded-xl p-6">
+                          <h3 className="text-lg font-semibold mb-4">Security Data Flows ({stepStates.data_extraction.result.extracted_security_data.security_data_flows.length})</h3>
+                          <div className="space-y-3">
+                            {stepStates.data_extraction.result.extracted_security_data.security_data_flows.slice(0, 5).map((flow: any, index: number) => (
+                              <div key={index} className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-medium text-blue-300">{flow.source}</span>
+                                  <ArrowRight className="w-4 h-4 text-gray-400" />
+                                  <span className="font-medium text-blue-300">{flow.destination}</span>
+                                </div>
+                                <div className="text-sm text-gray-400">
+                                  {flow.data_description} • {flow.protocol}
+                                </div>
+                                {flow.stride_threats && flow.stride_threats.length > 0 && (
+                                  <div className="mt-2 text-xs text-red-300">
+                                    Threats: {flow.stride_threats.slice(0, 2).join(', ')}
+                                    {flow.stride_threats.length > 2 && ` (+${flow.stride_threats.length - 2} more)`}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Trust Zones */}
+                      {stepStates.data_extraction.result.extracted_security_data?.trust_zones && (
+                        <div className="card-bg rounded-xl p-6">
+                          <h3 className="text-lg font-semibold mb-4">Trust Zones ({stepStates.data_extraction.result.extracted_security_data.trust_zones.length})</h3>
+                          <div className="space-y-3">
+                            {stepStates.data_extraction.result.extracted_security_data.trust_zones.map((zone: any, index: number) => (
+                              <div key={index} className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium text-indigo-300">{zone.name}</span>
+                                  <span className={`px-2 py-1 text-xs rounded ${
+                                    zone.security_level === 'Restricted' ? 'bg-red-500/20 text-red-300' :
+                                    zone.security_level === 'Internal' ? 'bg-yellow-500/20 text-yellow-300' :
+                                    zone.security_level === 'DMZ' ? 'bg-orange-500/20 text-orange-300' :
+                                    'bg-green-500/20 text-green-300'
+                                  }`}>
+                                    {zone.security_level}
+                                  </span>
+                                </div>
+                                {zone.components && zone.components.length > 0 && (
+                                  <div className="text-sm text-gray-400">
+                                    Components: {zone.components.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   <div className="flex items-center justify-between p-4 rounded-xl bg-green-500/10 border border-green-500/30">
                     <div>
@@ -963,7 +1097,10 @@ function HomePageContent() {
                       <p className="text-gray-400 text-sm">Use the extracted security data for DFD generation</p>
                     </div>
                     <button
-                      onClick={() => setCurrentStep('dfd_extraction')}
+                      onClick={() => {
+                        setStepStatus('data_extraction_review', 'complete')
+                        setCurrentStep('dfd_extraction')
+                      }}
                       className="px-4 py-2 gradient-purple-blue text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
                     >
                       <ArrowRight className="w-4 h-4" />

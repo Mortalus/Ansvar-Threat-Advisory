@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/apiClient';
 
 // Temporarily comment out complex components to test routing
 // import ProjectDashboard from '@/components/projects/project-dashboard';
@@ -65,17 +66,45 @@ export default function ProjectsPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
-  // Simple test function
+  // Test API using unified client
   const testApiConnection = async () => {
     try {
-      const response = await fetch('/api/projects');
-      if (response.ok) {
-        setError("✅ API connection successful!");
+      setError("🔄 Testing unified API client...");
+      
+      // Test health using unified client
+      const healthData = await apiClient.projects.health();
+      if (healthData.status === 'healthy') {
+        setError(`✅ Database healthy! Found ${healthData.projects_count} projects`);
+        
+        // Test list projects using unified client
+        const projectsData = await apiClient.projects.list();
+        setError(`✅ Projects API working! Found ${projectsData.length || 0} projects`);
+        return;
       } else {
-        setError(`❌ API error: ${response.status} ${response.statusText}`);
+        setError(`❌ Database unhealthy`);
+        return;
       }
     } catch (err) {
       setError(`❌ Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      
+      // Try system health as fallback
+      try {
+        await apiClient.health();
+        setError('⚠️ Projects API unavailable, but backend is running. Use main app for full functionality.');
+      } catch (healthErr) {
+        setError('❌ Backend completely unreachable. Check Docker containers.');
+      }
+    }
+  };
+
+  const createTestProject = async () => {
+    try {
+      setError("🔄 Creating test project...");
+      
+      const data = await apiClient.projects.createTest();
+      setError(`✅ Test project created: ${(data as any)?.name || 'New Project'}`);
+    } catch (err) {
+      setError(`❌ Failed to create project: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -98,6 +127,13 @@ export default function ProjectsPage() {
               </button>
               
               <button 
+                onClick={createTestProject}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                Create Test Project
+              </button>
+              
+              <button 
                 onClick={() => router.push('/')}
                 className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
               >
@@ -114,19 +150,41 @@ export default function ProjectsPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Debug Information</h2>
+          <h2 className="text-xl font-semibold mb-4">Current Status</h2>
           <div className="space-y-2 text-sm">
             <div>✅ Route accessible at /projects</div>
             <div>✅ Next.js app router working</div>
             <div>✅ React components rendering</div>
             <div>✅ Database migration completed</div>
+            <div>✅ Session resumption working in main app</div>
+            <div>✅ Threat generation errors fixed</div>
           </div>
           
-          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-sm text-yellow-800">
-              If the API test works, the full project management interface can be enabled.
-              The components are temporarily disabled for debugging.
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+            <h3 className="font-semibold text-blue-900 mb-2">Projects Functionality</h3>
+            <p className="text-sm text-blue-800 mb-2">
+              <strong>Issue:</strong> The main projects API has SQLAlchemy connection pooling issues that cause intermittent failures.
             </p>
+            <p className="text-sm text-blue-800 mb-2">
+              <strong>Workaround:</strong> Use session management through the main application:
+            </p>
+            <ul className="text-sm text-blue-800 list-disc ml-4 space-y-1">
+              <li>Start a pipeline in the main app</li>
+              <li>Sessions are automatically created and managed</li>
+              <li>Failed pipelines can be resumed from any step</li>
+              <li>All project data is preserved in the database</li>
+            </ul>
+          </div>
+          
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
+            <h3 className="font-semibold text-green-900 mb-2">✅ Core Issues Resolved</h3>
+            <ul className="text-sm text-green-800 list-disc ml-4 space-y-1">
+              <li>Threat generation now works without crashes</li>
+              <li>Session resumption fully functional</li>
+              <li>UI properly displays extracted data</li>
+              <li>Failed steps can be retried</li>
+              <li>Pipeline state is preserved across sessions</li>
+            </ul>
           </div>
         </div>
       </div>

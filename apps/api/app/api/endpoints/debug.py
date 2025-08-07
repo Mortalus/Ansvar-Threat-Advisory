@@ -177,3 +177,14 @@ async def get_sample_threats():
         "generated_at": datetime.utcnow().isoformat(),
         "status": "generated"
     }
+
+@router.get("/projects-simple")
+async def debug_projects_simple():
+    """Simple projects test endpoint"""
+    return {
+        "status": "working",
+        "message": "Projects debug endpoint is accessible",
+        "timestamp": datetime.utcnow().isoformat(),
+        "note": "This proves the debug router is working"
+    }
+

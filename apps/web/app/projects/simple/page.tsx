@@ -34,7 +34,7 @@ export default function SimpleProjectsPage() {
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
               <h3 className="font-medium text-yellow-800 mb-2">Debug Steps:</h3>
               <ol className="text-sm text-yellow-700 list-decimal list-inside space-y-1">
-                <li>Check if API server is running on port 8000</li>
+                <li>Check if the gateway and API services are running</li>
                 <li>Verify frontend server is running on port 3000</li>
                 <li>Test API endpoints: /api/projects</li>
                 <li>Check browser console for errors</li>

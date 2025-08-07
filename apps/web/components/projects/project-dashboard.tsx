@@ -61,7 +61,9 @@ export default function ProjectDashboard({
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/projects', {
+      // Use the working backend API through gateway
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+      const response = await fetch(`${apiBaseUrl}/api/projects-simple/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -79,6 +81,9 @@ export default function ProjectDashboard({
     } catch (err) {
       console.error('❌ Failed to load projects:', err);
       setError(err instanceof Error ? err.message : 'Failed to load projects');
+      
+      // Show helpful fallback message
+      setError('Projects API unavailable. Use the main app for full functionality - sessions are automatically managed there.');
     } finally {
       setLoading(false);
     }

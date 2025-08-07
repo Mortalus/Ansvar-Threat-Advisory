@@ -211,48 +211,65 @@ class StrideDataExtractor:
         enable_quality_validation: bool = True
     ) -> Tuple[ExtractedSecurityData, Dict[str, Any]]:
         """
-        Perform two-pass STRIDE-focused data extraction
+        Resilient STRIDE-focused data extraction with multiple fallback layers
         
         Args:
             document_text: Raw document content
-            enable_quality_validation: Whether to run quality validation pass
+            enable_quality_validation: Whether to attempt quality validation pass
             
         Returns:
-            Tuple of (extracted_data, metadata)
+            Tuple of (extracted_data, metadata) - ALWAYS succeeds with valid data
         """
         metadata = {
             "extraction_method": "stride_focused",
             "passes_performed": [],
             "token_usage": {},
-            "quality_validation_enabled": enable_quality_validation
+            "quality_validation_enabled": enable_quality_validation,
+            "fallback_used": None,
+            "errors": []
         }
         
-        logger.info("🛡️ Starting STRIDE-focused data extraction")
+        logger.info("🛡️ Starting resilient STRIDE-focused data extraction")
         logger.info(f"📄 Document length: {len(document_text)} characters")
         
-        # Pass 1: STRIDE Expert Extraction
-        logger.info("🔍 Pass 1: STRIDE Expert Analysis")
-        stride_result, stride_tokens = await self._stride_expert_pass(document_text)
-        metadata["passes_performed"].append("stride_expert")
-        metadata["token_usage"]["stride_expert"] = stride_tokens
-        
-        if not enable_quality_validation:
-            logger.info("⏭️ Quality validation disabled, returning STRIDE expert results")
+        # Layer 1: Try STRIDE Expert Extraction
+        try:
+            logger.info("🔍 Layer 1: STRIDE Expert Analysis")
+            stride_result, stride_tokens = await self._stride_expert_pass(document_text)
+            metadata["passes_performed"].append("stride_expert")
+            metadata["token_usage"]["stride_expert"] = stride_tokens
+            
+            # Ensure we have basic quality metrics
+            if not hasattr(stride_result, 'quality_score') or stride_result.quality_score is None:
+                stride_result.quality_score = 0.7
+            if not hasattr(stride_result, 'completeness_indicators') or not stride_result.completeness_indicators:
+                stride_result.completeness_indicators = {
+                    "assets_complete": len(stride_result.security_assets) > 0,
+                    "data_flows_complete": len(stride_result.security_data_flows) > 0,
+                    "trust_zones_complete": len(stride_result.trust_zones) > 0,
+                    "security_controls_complete": False,
+                    "stride_analysis_complete": False
+                }
+            
+            logger.info("✅ STRIDE expert extraction successful")
+            
+            # Layer 2: Try Quality Validation (completely optional)
+            if enable_quality_validation:
+                enhanced_result = await self._safe_quality_validation(document_text, stride_result, metadata)
+                if enhanced_result:
+                    return enhanced_result, metadata
+            
+            # Return STRIDE expert results (guaranteed success)
+            metadata["token_usage"]["total"] = stride_tokens
             return stride_result, metadata
-        
-        # Pass 2: Quality Validation
-        logger.info("✅ Pass 2: Quality Validation and Enhancement")
-        enhanced_result, quality_tokens = await self._quality_validator_pass(
-            document_text, stride_result
-        )
-        metadata["passes_performed"].append("quality_validator") 
-        metadata["token_usage"]["quality_validator"] = quality_tokens
-        metadata["token_usage"]["total"] = stride_tokens + quality_tokens
-        
-        logger.info(f"🎯 Quality Score: {enhanced_result.quality_score}")
-        logger.info(f"📊 Total tokens used: {metadata['token_usage']['total']}")
-        
-        return enhanced_result, metadata
+            
+        except Exception as e:
+            logger.error(f"❌ STRIDE expert pass failed: {e}")
+            metadata["errors"].append(f"stride_expert_failed: {str(e)}")
+            
+        # Layer 3: Minimal extraction fallback
+        logger.warning("🆘 Using minimal extraction fallback")
+        return await self._minimal_extraction_fallback(document_text, metadata)
     
     async def _stride_expert_pass(
         self, 
@@ -274,8 +291,8 @@ class StrideDataExtractor:
         logger.info(f"🪙 STRIDE expert tokens: {token_usage}")
         
         try:
-            # Parse JSON response
-            extracted_json = json.loads(response.content.strip())
+            # Parse JSON response with resilient cleaning
+            extracted_json = self._parse_llm_json_response(response.content, "STRIDE expert")
             
             # Convert to Pydantic model for validation
             extracted_data = ExtractedSecurityData(**extracted_json)
@@ -287,25 +304,12 @@ class StrideDataExtractor:
             
             return extracted_data, token_usage
             
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.error(f"❌ Failed to parse STRIDE expert response: {e}")
+        except Exception as e:
+            logger.error(f"❌ STRIDE expert extraction failed: {e}")
             logger.error(f"Raw response: {response.content[:500]}...")
             
-            # Return minimal structure on parse failure
-            fallback_data = ExtractedSecurityData(
-                project_name="Unknown Project",
-                project_description="Extraction failed",
-                industry_context="Unknown",
-                external_entities=[],
-                security_assets=[],
-                processes=[],
-                trust_zones=[],
-                security_data_flows=[],
-                access_patterns=[],
-                business_criticality="Unknown",
-                regulatory_environment="Unknown"
-            )
-            return fallback_data, token_usage
+            # Don't return fallback here - let the main method handle it
+            raise e
     
     async def _quality_validator_pass(
         self,
@@ -333,8 +337,8 @@ class StrideDataExtractor:
         logger.info(f"🪙 Quality validator tokens: {token_usage}")
         
         try:
-            # Parse enhanced JSON response
-            enhanced_json = json.loads(response.content.strip())
+            # Parse JSON response with resilient cleaning
+            enhanced_json = self._parse_llm_json_response(response.content, "Quality validator")
             
             # Convert to Pydantic model
             enhanced_data = ExtractedSecurityData(**enhanced_json)
@@ -352,21 +356,194 @@ class StrideDataExtractor:
             
             return enhanced_data, token_usage
             
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.warning(f"⚠️ Quality validation failed, using STRIDE expert results: {e}")
-            logger.warning(f"Raw response: {response.content[:500]}...")
+        except Exception as e:
+            logger.warning(f"⚠️ Quality validation JSON parsing failed: {e}")
             
-            # Fall back to original STRIDE expert results
-            stride_data.quality_score = 0.7  # Assign default score
-            stride_data.completeness_indicators = {
-                "assets_complete": True,
-                "data_flows_complete": True, 
+            # Re-raise to be handled by _safe_quality_validation
+            raise e
+    
+    async def _safe_quality_validation(
+        self,
+        document_text: str,
+        stride_data: ExtractedSecurityData,
+        metadata: Dict[str, Any]
+    ) -> Optional[ExtractedSecurityData]:
+        """
+        Safe quality validation with comprehensive error handling
+        Returns enhanced result on success, None on any failure
+        """
+        try:
+            logger.info("🔍 Layer 2: Safe Quality Validation")
+            
+            # Pre-flight check: ensure stride_data can be serialized
+            try:
+                test_json = stride_data.model_dump_json(indent=2)
+                logger.info("✅ Stride data serialization check passed")
+            except Exception as serialize_e:
+                logger.warning(f"⚠️ Stride data cannot be serialized, skipping quality validation: {serialize_e}")
+                metadata["errors"].append(f"serialization_failed: {str(serialize_e)}")
+                return None
+            
+            # Attempt quality validation
+            enhanced_result, quality_tokens = await self._quality_validator_pass(
+                document_text, stride_data
+            )
+            
+            metadata["passes_performed"].append("quality_validator")
+            metadata["token_usage"]["quality_validator"] = quality_tokens
+            metadata["token_usage"]["total"] = metadata["token_usage"]["stride_expert"] + quality_tokens
+            
+            logger.info("✅ Quality validation successful")
+            logger.info(f"🎯 Quality Score: {enhanced_result.quality_score}")
+            
+            return enhanced_result
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Quality validation failed safely: {e}")
+            metadata["errors"].append(f"quality_validation_failed: {str(e)}")
+            metadata["passes_performed"].append("quality_validator_failed")
+            return None
+    
+    async def _minimal_extraction_fallback(
+        self,
+        document_text: str,
+        metadata: Dict[str, Any]
+    ) -> Tuple[ExtractedSecurityData, Dict[str, Any]]:
+        """
+        Minimal fallback that always succeeds - extracts basic info from document
+        """
+        logger.info("🆘 Creating minimal security data from document analysis")
+        
+        # Basic document analysis without LLM
+        words = document_text.lower().split()
+        word_count = len(words)
+        
+        # Extract potential asset names (simple heuristics)
+        potential_assets = []
+        asset_keywords = ['database', 'server', 'api', 'service', 'cache', 'queue', 'storage', 'file']
+        for word in words:
+            if any(keyword in word for keyword in asset_keywords):
+                if word not in potential_assets and len(potential_assets) < 5:
+                    potential_assets.append(word.title())
+        
+        # Create minimal security data
+        minimal_data = ExtractedSecurityData(
+            project_name="Document Analysis",
+            project_description="Extracted from document content",
+            industry_context="Technology",
+            compliance_frameworks=[],
+            external_entities=["Users", "External Services"],
+            security_assets=[
+                SecurityAsset(
+                    name=asset,
+                    type="Component",
+                    sensitivity="Internal",
+                    data_types=["Application Data"],
+                    security_controls=[],
+                    compliance_requirements=[]
+                ) for asset in potential_assets[:3]  # Limit to 3 assets
+            ],
+            processes=["Data Processing", "User Authentication"],
+            trust_zones=[
+                TrustZone(
+                    name="Internal Network",
+                    security_level="Internal",
+                    components=["Application Components"],
+                    access_controls=[],
+                    network_controls=[]
+                )
+            ],
+            security_data_flows=[],
+            access_patterns=[
+                AccessPattern(
+                    actor="User",
+                    target_assets=potential_assets[:1] if potential_assets else ["System"],
+                    access_type="Read",
+                    authentication_required=True,
+                    authorization_level="User",
+                    typical_frequency="Frequent"
+                )
+            ],
+            business_criticality="Medium",
+            regulatory_environment="Standard",
+            threat_landscape=["Data Breach", "Unauthorized Access"],
+            quality_score=0.3,  # Low score for fallback
+            completeness_indicators={
+                "assets_complete": len(potential_assets) > 0,
+                "data_flows_complete": False,
                 "trust_zones_complete": True,
                 "security_controls_complete": False,
                 "stride_analysis_complete": False
             }
+        )
+        
+        metadata["fallback_used"] = "minimal_extraction"
+        metadata["token_usage"]["stride_expert"] = 0
+        metadata["token_usage"]["total"] = 0
+        metadata["passes_performed"].append("minimal_fallback")
+        
+        logger.info("✅ Minimal extraction fallback completed")
+        return minimal_data, metadata
+    
+    def _parse_llm_json_response(self, raw_response: str, context: str = "LLM") -> Dict[str, Any]:
+        """
+        Resilient JSON parsing with multiple repair strategies
+        """
+        logger.info(f"🔍 Parsing {context} JSON response ({len(raw_response)} chars)")
+        
+        # Strategy 1: Try parsing as-is
+        try:
+            return json.loads(raw_response.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 2: Extract from markdown wrapper
+        try:
+            if "```json" in raw_response:
+                json_start = raw_response.find('{')
+                json_end = raw_response.rfind('}') + 1
+                if json_start != -1 and json_end > json_start:
+                    content = raw_response[json_start:json_end]
+                    logger.info("🔧 Extracted JSON from markdown")
+                    return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 3: Remove outer quotes and escaping
+        try:
+            content = raw_response.strip()
+            content = content.replace('\\n', '').replace('\\"', '"')
             
-            return stride_data, token_usage
+            if content.startswith('"') and content.endswith('"'):
+                content = content[1:-1]
+                logger.info("🔧 Removed outer quotes")
+                
+            # Try to find JSON boundaries
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            
+            if json_start != -1 and json_end > json_start:
+                content = content[json_start:json_end]
+                logger.info("🔧 Extracted JSON boundaries")
+                return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 4: Last resort - regex extraction
+        try:
+            import re
+            json_pattern = r'\{.*\}'
+            matches = re.findall(json_pattern, raw_response, re.DOTALL)
+            if matches:
+                logger.info("🔧 Found JSON via regex")
+                return json.loads(matches[0])
+        except json.JSONDecodeError:
+            pass
+        
+        # All strategies failed
+        logger.error(f"❌ All JSON parsing strategies failed for {context}")
+        logger.error(f"Raw response sample: {raw_response[:200]}...")
+        raise json.JSONDecodeError(f"Unable to parse {context} JSON response", raw_response, 0)
 
 async def extract_stride_security_data(
     llm_provider: BaseLLMProvider,

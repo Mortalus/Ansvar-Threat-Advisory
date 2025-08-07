@@ -19,6 +19,14 @@ from app.services.prompt_service import PromptService
 from app.core.llm import get_llm_provider
 from app.config import settings
 
+# Phase 2: Resilience patterns
+from app.core.resilience import (
+    resilient_llm_operation,
+    resilient_db_operation, 
+    FallbackStrategies,
+    get_circuit_breaker_status
+)
+
 # Import standalone components  
 from .controls_library import ControlsLibrary, ResidualRiskCalculator, SECURITY_CONTROLS
 
@@ -301,32 +309,49 @@ class ThreatGeneratorV3:
         """Consolidate threats from all sources, removing duplicates."""
         all_threats = []
         
-        # Add source tags
+        # Add source tags with defensive programming
         for threat in context_aware:
-            threat['analysis_source'] = 'context_aware'
-            threat['threat_class'] = 'technical'
-            all_threats.append(threat)
+            if isinstance(threat, dict):
+                threat['analysis_source'] = 'context_aware'
+                threat['threat_class'] = 'technical'
+                all_threats.append(threat)
+            else:
+                logger.warning(f"⚠️ Skipping invalid context_aware threat (not dict): {type(threat)} - {str(threat)[:100]}")
         
         for threat in architectural:
-            threat['analysis_source'] = 'architectural_agent'
-            threat['threat_class'] = 'architectural'
-            all_threats.append(threat)
+            if isinstance(threat, dict):
+                threat['analysis_source'] = 'architectural_agent'
+                threat['threat_class'] = 'architectural'
+                all_threats.append(threat)
+            else:
+                logger.warning(f"⚠️ Skipping invalid architectural threat (not dict): {type(threat)} - {str(threat)[:100]}")
         
         for threat in business:
-            threat['analysis_source'] = 'business_agent'
-            threat['threat_class'] = 'business'
-            all_threats.append(threat)
+            if isinstance(threat, dict):
+                threat['analysis_source'] = 'business_agent'
+                threat['threat_class'] = 'business'
+                all_threats.append(threat)
+            else:
+                logger.warning(f"⚠️ Skipping invalid business threat (not dict): {type(threat)} - {str(threat)[:100]}")
         
         for threat in compliance:
-            threat['analysis_source'] = 'compliance_agent'
-            threat['threat_class'] = 'compliance'
-            all_threats.append(threat)
+            if isinstance(threat, dict):
+                threat['analysis_source'] = 'compliance_agent'
+                threat['threat_class'] = 'compliance'
+                all_threats.append(threat)
+            else:
+                logger.warning(f"⚠️ Skipping invalid compliance threat (not dict): {type(threat)} - {str(threat)[:100]}")
         
         # Remove obvious duplicates (same name and component)
         seen = set()
         unique_threats = []
         
         for threat in all_threats:
+            # Defensive check before accessing threat properties
+            if not isinstance(threat, dict):
+                logger.warning(f"⚠️ Skipping invalid threat in deduplication (not dict): {type(threat)}")
+                continue
+                
             key = (
                 threat.get('Threat Name', '').lower(),
                 threat.get('component_name', '').lower()
@@ -354,6 +379,11 @@ class ThreatGeneratorV3:
         likelihood_scores = {'High': 3, 'Medium': 2, 'Low': 1}
         
         for threat in threats:
+            # Defensive check - ensure threat is a dictionary
+            if not isinstance(threat, dict):
+                logger.warning(f"⚠️ Skipping invalid threat in prioritization (not dict): {type(threat)} - {str(threat)[:100]}")
+                continue
+                
             # Base scores
             severity = severity_scores.get(threat.get('Potential Impact', 'Medium'), 2)
             likelihood = likelihood_scores.get(threat.get('Likelihood', 'Medium'), 2)
@@ -405,23 +435,28 @@ class ThreatGeneratorV3:
         """Identify critical security gaps from threat analysis."""
         gaps = []
         
+        # Filter out invalid threats (defensive programming)
+        valid_threats = [t for t in threats if isinstance(t, dict)]
+        if len(valid_threats) < len(threats):
+            logger.warning(f"⚠️ Filtered out {len(threats) - len(valid_threats)} invalid threats in critical gaps analysis")
+        
         # Check for critical architectural issues
-        arch_threats = [t for t in threats if t.get('threat_class') == 'architectural']
+        arch_threats = [t for t in valid_threats if t.get('threat_class') == 'architectural']
         if any('single point of failure' in t.get('Description', '').lower() for t in arch_threats):
             gaps.append("Single points of failure in critical components")
         
         # Check for compliance gaps
-        compliance_threats = [t for t in threats if t.get('threat_class') == 'compliance']
+        compliance_threats = [t for t in valid_threats if t.get('threat_class') == 'compliance']
         if len(compliance_threats) > 5:
             gaps.append("Multiple compliance requirements not met")
         
         # Check for high residual risks
-        high_residual = [t for t in threats if t.get('residual_risk') in ['Critical', 'High']]
+        high_residual = [t for t in valid_threats if t.get('residual_risk') in ['Critical', 'High']]
         if len(high_residual) > 10:
             gaps.append("Insufficient security controls for high-risk threats")
         
         # Check for business continuity
-        if any('disaster recovery' in t.get('Description', '').lower() for t in threats):
+        if any('disaster recovery' in t.get('Description', '').lower() for t in valid_threats):
             gaps.append("Business continuity planning gaps")
         
         return gaps[:5]  # Top 5 gaps
@@ -470,6 +505,9 @@ class ThreatGeneratorV3:
         # Group threats by class
         by_class = {}
         for threat in threats[:20]:  # Look at top 20
+            # Defensive check
+            if not isinstance(threat, dict):
+                continue
             threat_class = threat.get('threat_class', 'unknown')
             if threat_class not in by_class:
                 by_class[threat_class] = 0
@@ -513,53 +551,60 @@ class ThreatGeneratorV3:
     
     def _summarize_architectural_insights(self, threats: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Summarize architectural findings."""
-        if not threats:
+        # Filter out invalid threats
+        valid_threats = [t for t in threats if isinstance(t, dict)]
+        if not valid_threats:
             return {"status": "No architectural issues detected"}
         
         patterns = []
-        for threat in threats[:5]:
-            if pattern := threat.get('pattern_detected'):
+        for threat in valid_threats[:5]:
+            # Already filtered by valid_threats, but double-check
+            if isinstance(threat, dict) and (pattern := threat.get('pattern_detected')):
                 patterns.append(pattern)
         
         return {
-            "issues_found": len(threats),
+            "issues_found": len(valid_threats),
             "top_patterns": list(set(patterns)),
-            "most_critical": threats[0].get('Description', '') if threats else None
+            "most_critical": valid_threats[0].get('Description', '') if valid_threats else None
         }
     
     def _summarize_business_insights(self, threats: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Summarize business impact findings."""
-        if not threats:
+        # Filter out invalid threats
+        valid_threats = [t for t in threats if isinstance(t, dict)]
+        if not valid_threats:
             return {"status": "No business risks identified"}
         
         # Look for financial exposure
         financial_risks = [
             t.get('financial_exposure', 'Unknown')
-            for t in threats
+            for t in valid_threats
             if t.get('financial_exposure') and t.get('financial_exposure') != 'Unknown'
         ]
         
         return {
-            "risks_identified": len(threats),
+            "risks_identified": len(valid_threats),
             "financial_exposure": financial_risks[:3] if financial_risks else ["Not quantified"],
-            "top_business_risk": threats[0].get('Description', '') if threats else None
+            "top_business_risk": valid_threats[0].get('Description', '') if valid_threats else None
         }
     
     def _summarize_compliance_insights(self, threats: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Summarize compliance findings."""
-        if not threats:
+        # Filter out invalid threats
+        valid_threats = [t for t in threats if isinstance(t, dict)]
+        if not valid_threats:
             return {"status": "No compliance issues detected"}
         
         # Extract frameworks
         frameworks = set()
-        for threat in threats:
+        for threat in valid_threats:
             if threat.get('applicable_frameworks'):
                 frameworks.update(threat['applicable_frameworks'])
         
         return {
-            "issues_found": len(threats),
+            "issues_found": len(valid_threats),
             "frameworks_affected": list(frameworks),
-            "most_critical": threats[0].get('Description', '') if threats else None
+            "most_critical": valid_threats[0].get('Description', '') if valid_threats else None
         }
     
     async def _retrieve_cwe_context(self, component_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
@@ -720,6 +765,7 @@ class ThreatGeneratorV3:
     ) -> List[Dict[str, Any]]:
         """
         Generate core STRIDE threats using LLM with CWE context.
+        Phase 2: Enhanced with circuit breaker and fallback strategies
         
         Args:
             db_session: Database session
@@ -730,7 +776,29 @@ class ThreatGeneratorV3:
             List of generated threats
         """
         try:
-            logger.info("🎯 Starting core STRIDE threat generation")
+            logger.info("🎯 Starting resilient core STRIDE threat generation")
+            
+            # Phase 2: Wrap LLM call with resilience patterns
+            return await resilient_llm_operation(
+                self._execute_llm_threat_generation,
+                db_session,
+                component_data, 
+                document_text
+            )
+        except Exception as e:
+            logger.error(f"❌ Core threat generation failed, using fallback: {e}")
+            fallback_data = await FallbackStrategies.get_sample_threats()
+            return fallback_data.get("threats", [])
+
+    async def _execute_llm_threat_generation(
+        self,
+        db_session: AsyncSession,
+        component_data: Dict[str, Any],
+        document_text: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Execute the actual LLM threat generation (wrapped by circuit breaker)"""
+        try:
+            logger.info("🔄 Executing LLM threat generation with circuit breaker")
             
             # Get prompt template
             prompt_service = PromptService(db_session)
@@ -860,6 +928,11 @@ Format as JSON array of threat objects.
                 # Normalize threat format
                 threats = []
                 for threat in threats_data:
+                    # Defensive programming: ensure threat is a dictionary
+                    if not isinstance(threat, dict):
+                        logger.warning(f"⚠️ Skipping invalid threat in parse_threat_response (not dict): {type(threat)}")
+                        continue
+                    
                     normalized_threat = {
                         'Title': threat.get('title', threat.get('Title', 'Unknown Threat')),
                         'Description': threat.get('description', threat.get('Description', '')),
@@ -911,6 +984,11 @@ Format as JSON array of threat objects.
         risk_levels = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
         
         for threat in threats:
+            # Defensive check
+            if not isinstance(threat, dict):
+                logger.warning(f"⚠️ Skipping invalid threat in risk metrics (not dict): {type(threat)}")
+                continue
+                
             risk_level = threat.get('residual_risk_level', threat.get('impact', 'Medium'))
             if risk_level in risk_levels:
                 risk_levels[risk_level] += 1

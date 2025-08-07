@@ -1,7 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Phase 2: Gateway-based routing - use same-origin through NGINX reverse proxy
+const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // Log API URL for debugging
-console.log('API_URL configured as:', API_URL)
+console.log('API_URL configured as:', API_URL || '[same-origin via gateway]')
 
 export interface DFDComponents {
   project_name: string
@@ -146,7 +147,7 @@ async function uploadDocuments(files: File[]): Promise<UploadResponse> {
   } catch (error) {
     console.error('Network error during upload:', error)
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Cannot connect to server. Please ensure the backend is running on port 8000.')
+      throw new Error('Cannot connect to server. Please ensure the gateway is running.')
     }
     throw error
   }
@@ -408,11 +409,25 @@ function connectWebSocket(pipelineId: string, handlers: {
   onError?: (error: Event) => void
   onClose?: () => void
 }): WebSocket {
-  const wsURL = API_URL.replace('http', 'ws')
+  // Phase 2: WebSocket through NGINX gateway  
+  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL || ''
+  let wsURL = wsBaseUrl
+  
+  // Smart gateway routing: Always use port 80 for WebSocket (the main gateway port)
+  if (!wsURL && typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    wsURL = `ws://${hostname}` // Always use port 80 (default) for WebSocket through gateway
+  }
+  
+  // Fallback for server-side rendering
+  if (!wsURL) {
+    wsURL = 'ws://localhost'
+  }
+  
   const ws = new WebSocket(`${wsURL}/ws/${pipelineId}`)
 
   ws.onopen = () => {
-    console.log('WebSocket connected for pipeline:', pipelineId)
+    console.log('WebSocket connected for pipeline:', pipelineId, 'via', wsURL)
   }
 
   ws.onmessage = (event) => {
