@@ -48,6 +48,33 @@ The Threat Modeling Pipeline now features an **extremely robust and modular agen
 
 ---
 
+## 🔄 Latest Delta (Aug 8, 2025)
+
+### What was implemented
+- Agent catalog cache with 30s TTL, startup warmup, and Celery Beat periodic refresh.
+- Background step execution: `POST /api/tasks/execute-step` accepts `step_name` alias; emits WebSocket queued notifications; RBAC enforced.
+- RBAC applied to pipeline, agent management, and KB endpoints; KB uses `AGENT_MANAGE` temporarily pending `KB_MANAGE` enum.
+- Mock LLM signature aligned with base provider (temperature, max_tokens) to prevent interface mismatches.
+- Settings service method for fetching agent prompts with defensive fallbacks for unmigrated test DBs.
+- Health monitor recovery path made null-safe; tests register agents globally for recovery scenarios.
+- Docker Compose auto-runs Alembic migrations for api/worker/beat services on startup.
+
+### Architectural decisions
+- Cache-first agent catalog to keep endpoint latency sub-second while ensuring freshness via periodic refresh.
+- Async-by-default long-running steps using Celery; WebSocket-first notifications with polling fallback.
+- Progressive RBAC rollout at endpoint boundaries; evolve permission taxonomy incrementally (introduce `KB_MANAGE`).
+- Provider interface parity across LLM backends, including mock, to guarantee test/prod behavior consistency.
+- Defensive programming as a principle: null-safety, tolerant cache/inspect failures, explicit fallbacks.
+
+### Still to do (near-term)
+- Add `KB_MANAGE` to `PermissionType`, seed in RBAC init, and switch KB endpoints to use it.
+- Persist task history and progress metadata; enhance `/tasks/status` to expose normalized progress and pagination.
+- Admin dashboards: agents catalog freshness/TTL, task monitor, health metrics.
+- RAG/KB hardening: ingestion error surfaces, pgvector index checks, and multi-tenant scoping.
+- Correlation IDs propagation into Celery tasks and WebSocket events.
+
+---
+
 ## 📊 **Test Results**
 
 ```

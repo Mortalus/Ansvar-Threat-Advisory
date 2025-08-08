@@ -8,6 +8,13 @@ maintain compatibility with the existing V3 threat analysis pipeline.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
+from typing import Union
+try:
+    # Pydantic v2
+    from pydantic import ConfigDict
+    HAS_V2 = True
+except Exception:
+    HAS_V2 = False
 from enum import Enum
 import logging
 import time
@@ -100,10 +107,12 @@ class ThreatOutput(BaseModel):
 
 
 class AgentExecutionContext(BaseModel):
-    """Context provided to agents during execution"""
-    document_text: Optional[str] = None
-    components: Optional[Dict[str, Any]] = None
-    existing_threats: Optional[List[Dict]] = None
+    """Context provided to agents during execution (legacy-compatible)."""
+    if HAS_V2:
+        model_config = ConfigDict(populate_by_name=True)
+    document_text: Optional[str] = Field(default=None, alias="document_content")
+    components: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
+    existing_threats: Optional[List[Dict[str, Any]]] = None
     pipeline_id: Optional[str] = None
     user_config: Optional[Dict[str, Any]] = None
     
@@ -133,7 +142,6 @@ class BaseAgent(ABC):
         """Return agent metadata and capabilities"""
         pass
     
-    @abstractmethod
     async def analyze(
         self,
         context: AgentExecutionContext,
@@ -142,18 +150,46 @@ class BaseAgent(ABC):
         settings_service: Optional[Any] = None
     ) -> List[ThreatOutput]:
         """
-        Perform threat analysis
-        
-        Args:
-            context: Execution context with document/components
-            llm_provider: LLM provider instance
-            db_session: Database session
-            settings_service: For custom prompts and settings
-            
-        Returns:
-            List of threats in standardized format
+        Perform threat analysis.
+
+        Backward compatibility: If subclasses implemented legacy `execute(...)`,
+        this default implementation will delegate to `execute`. New agents should
+        override `analyze` directly.
         """
-        pass
+        # Legacy adapter path
+        if hasattr(self, "execute") and callable(getattr(self, "execute")):
+            # Expect legacy execute to return ThreatOutput or list/dicts
+            result = await getattr(self, "execute")(context)  # type: ignore[misc]
+            # Normalize legacy outputs to List[ThreatOutput]
+            if isinstance(result, ThreatOutput):
+                return [result]
+            if isinstance(result, list):
+                # If dicts, convert to ThreatOutput with minimal mapping
+                outputs: List[ThreatOutput] = []
+                for item in result:
+                    if isinstance(item, ThreatOutput):
+                        outputs.append(item)
+                    elif isinstance(item, dict):
+                        # Fill minimal required fields with safe defaults
+                        outputs.append(
+                            ThreatOutput(
+                                threat_id=item.get("threat_id", f"{self.get_metadata().name}_{hash(item.get('Threat Name','unknown')) & 0xFFFFFF:06x}"),
+                                threat_name=item.get("Threat Name", item.get("threat_name", "Unknown Threat")),
+                                description=item.get("Description", item.get("description", "")),
+                                stride_category=item.get("STRIDE Category", item.get("stride_category", "Unknown")),
+                                affected_component=item.get("Affected Component", item.get("affected_component", "")),
+                                potential_impact=item.get("Potential Impact", item.get("potential_impact", "Medium")),
+                                likelihood=item.get("Likelihood", item.get("likelihood", "Medium")),
+                                mitigation_strategy=item.get("Suggested Mitigation", item.get("mitigation_strategy", "")),
+                                agent_source=self.get_metadata().name,
+                                confidence_score=float(item.get("confidence_score", 0.8)),
+                            )
+                        )
+                return outputs
+            # Unknown legacy return
+            logger.warning("Legacy execute returned unexpected type; returning empty threats")
+            return []
+        raise NotImplementedError("Agents must implement analyze(context, ...) or legacy execute(context)")
     
     def validate_context(self, context: AgentExecutionContext) -> bool:
         """Check if agent has required context"""

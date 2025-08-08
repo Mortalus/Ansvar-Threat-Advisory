@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Simple WebSocket client for testing real-time notifications"""
+"""Simple WebSocket client for testing real-time notifications
+
+Note: This is a manual E2E helper, not an automated pytest test module.
+"""
+
+import pytest
+pytestmark = pytest.mark.skip(reason="Manual WebSocket E2E helper; skip during automated pytest runs")
 
 import asyncio
 import websockets

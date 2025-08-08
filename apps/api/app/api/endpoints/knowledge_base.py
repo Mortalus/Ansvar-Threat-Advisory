@@ -12,6 +12,8 @@ from app.services.ingestion_service import IngestionService
 from app.tasks.knowledge_base_tasks import ingest_knowledge_base
 from app.models import KnowledgeBaseEntry
 from sqlalchemy import select, func
+from app.api.v1.auth import require_permission
+from app.models import PermissionType
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,8 @@ class KnowledgeBaseStats(BaseModel):
 async def ingest_knowledge_source(
     request: KnowledgeSourceRequest,
     background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """
     Trigger ingestion of a knowledge source.
@@ -78,7 +81,8 @@ async def ingest_knowledge_source(
 @router.post("/search")
 async def search_knowledge_base(
     request: SearchRequest,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """
     Search the knowledge base for similar content.
@@ -113,7 +117,8 @@ async def search_knowledge_base(
 
 @router.get("/stats", response_model=KnowledgeBaseStats)
 async def get_knowledge_base_stats(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """
     Get statistics about the knowledge base.
@@ -157,7 +162,8 @@ async def get_knowledge_base_stats(
 
 @router.post("/initialize-default")
 async def initialize_default_sources(
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """
     Initialize the knowledge base with default sources.
@@ -201,7 +207,8 @@ async def initialize_default_sources(
 @router.delete("/source/{source_name}")
 async def delete_knowledge_source(
     source_name: str,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """
     Delete all entries from a specific knowledge source.

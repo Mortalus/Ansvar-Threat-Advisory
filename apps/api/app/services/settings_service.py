@@ -211,3 +211,28 @@ class SettingsService:
                 # Fall through to return base prompt
         
         return base_prompt
+
+    async def get_agent_prompt(
+        self,
+        agent_name: str,
+        *,
+        step_name: str = "threat_generation",
+        fallback_prompt: Optional[str] = None
+    ) -> Optional[str]:
+        """Lightweight wrapper used by agents to fetch a custom prompt.
+
+        Defensive behavior: if the underlying tables are missing (e.g., in a
+        test environment without migrations), return the fallback or None.
+        """
+        try:
+            return await self.get_system_prompt_for_step(
+                step_name=step_name,
+                agent_type=agent_name,
+                fallback_prompt=fallback_prompt,
+                enable_few_shot_learning=False,
+            )
+        except Exception as e:
+            logger.warning(
+                f"get_agent_prompt fallback for {step_name}/{agent_name}: {e}"
+            )
+            return fallback_prompt

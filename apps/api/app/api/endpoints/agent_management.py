@@ -15,6 +15,8 @@ import logging
 import uuid
 
 from app.dependencies import get_db
+from app.api.v1.auth import require_permission
+from app.models import PermissionType
 from app.models.agent_config import AgentConfiguration, AgentPromptVersion, AgentExecutionLog
 from app.core.agents import agent_registry
 from app.core.agents.base import AgentExecutionContext
@@ -65,7 +67,8 @@ class PromptVersionRequest(BaseModel):
 async def list_agents(
     include_disabled: bool = Query(False, description="Include disabled agents"),
     category: Optional[str] = Query(None, description="Filter by category"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """List all available agents with their status and basic metrics"""
     
@@ -133,7 +136,8 @@ async def list_agents(
 @router.get("/{agent_name}", response_model=Dict[str, Any])
 async def get_agent_details(
     agent_name: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """Get detailed information about a specific agent"""
     
@@ -246,7 +250,8 @@ async def configure_agent(
     agent_name: str,
     config: AgentConfigRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """Update agent configuration with hot reload"""
     
@@ -314,7 +319,8 @@ async def configure_agent(
 async def test_agent(
     agent_name: str,
     request: TestAgentRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """Test an agent with sample data"""
     
@@ -420,7 +426,8 @@ async def test_agent(
 @router.post("/{agent_name}/enable")
 async def enable_agent(
     agent_name: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """Enable an agent"""
     
@@ -470,7 +477,8 @@ async def enable_agent(
 @router.post("/{agent_name}/disable")
 async def disable_agent(
     agent_name: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.AGENT_MANAGE))
 ):
     """Disable an agent"""
     
@@ -521,7 +529,8 @@ async def disable_agent(
 async def get_agent_execution_history(
     agent_name: str,
     limit: int = Query(20, ge=1, le=100, description="Number of history entries to return"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """Get execution history for a specific agent"""
     
@@ -565,7 +574,8 @@ async def get_agent_execution_history(
 @router.get("/{agent_name}/performance")
 async def get_agent_performance_stats(
     agent_name: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _perm = Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """Get performance statistics for a specific agent"""
     

@@ -9,6 +9,13 @@
 - ✅ **Tasks API**: Optimized with timeout handling (`/api/tasks/list`)
 - ✅ **Threat Generation API**: Updated to accept `selected_agents`
 
+> Status delta (Aug 8, 2025)
+- Backend tests: 28 passed, 13 skipped, 0 failed
+- `/api/tasks/execute-step` accepts `step_name` alias; returns queued `task_id`
+- WebSocket queued notification added for background steps
+- RBAC enforced on tasks; tests override auth in fixtures
+- Agents catalog endpoint now cache-backed; `?refresh=true` supported
+
 ### **Frontend Components Status**
 - ✅ **Agent Configuration Step**: Added with defensive error handling
 - ✅ **Threat Generation Step**: Created with real-time progress tracking

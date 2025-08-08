@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from app.core.pipeline.manager import PipelineManager, PipelineStatus, PipelineStep
 from app.dependencies import get_pipeline_manager
 import logging
+from app.api.v1.auth import require_permission
+from app.models import PermissionType
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
@@ -19,7 +21,8 @@ class ExecuteStepRequest(BaseModel):
 @router.post("/create")
 async def create_pipeline(
     metadata: Optional[Dict[str, Any]] = None,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """Create a new pipeline run"""
     try:
@@ -50,7 +53,8 @@ async def execute_step(
     pipeline_id: str,
     step: str,
     request: ExecuteStepRequest = ExecuteStepRequest(),
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """Execute a specific step in the pipeline"""
     try:
@@ -115,7 +119,8 @@ async def execute_step(
 @router.get("/{pipeline_id}/status")
 async def get_pipeline_status(
     pipeline_id: str,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """Get the current status of a pipeline"""
     try:
@@ -132,7 +137,8 @@ async def get_pipeline_status(
 @router.post("/{pipeline_id}/cancel")
 async def cancel_pipeline(
     pipeline_id: str,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """Cancel a running pipeline"""
     try:
@@ -153,7 +159,8 @@ async def cancel_pipeline(
 async def list_pipelines(
     status: Optional[str] = None,
     limit: int = 10,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """List pipelines with optional filtering"""
     try:
@@ -181,7 +188,8 @@ async def list_pipelines(
 async def get_step_result(
     pipeline_id: str,
     step: str,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_VIEW))
 ):
     """Get the result of a specific pipeline step"""
     try:
@@ -213,7 +221,8 @@ async def get_step_result(
 @router.delete("/{pipeline_id}")
 async def delete_pipeline(
     pipeline_id: str,
-    manager: PipelineManager = Depends(get_pipeline_manager)
+    manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """Delete a pipeline and its results"""
     try:

@@ -8,7 +8,7 @@ enabling dynamic loading and hot-reloading capabilities.
 import importlib
 import inspect
 from pathlib import Path
-from typing import Dict, List, Type, Optional, Any
+from typing import Dict, List, Type, Optional, Any, Tuple
 import logging
 import asyncio
 from datetime import datetime
@@ -28,6 +28,12 @@ class AgentRegistry:
         self._agents: Dict[str, Type[BaseAgent]] = {}
         self._instances: Dict[str, BaseAgent] = {}
         self._configurations: Dict[str, Dict] = {}
+        # Lightweight in-process cache for agent catalog
+        self._catalog_cache: Optional[List[Dict[str, Any]] ] = None
+        self._catalog_cached_at: Optional[float] = None
+        self._last_refresh: Optional[datetime] = None
+        self._refresh_in_progress: bool = False
+        self._refresh_lock: asyncio.Lock = asyncio.Lock()
         self._legacy_mapping = {
             # Map old V3 agent names to new modular agents
             "architectural_risk_agent": "architectural_risk",
@@ -341,10 +347,126 @@ class AgentRegistry:
             
             await db_session.commit()
             logger.info(f"✅ Updated database registry for {len(self._instances)} agents")
+            self._last_refresh = datetime.utcnow()
             
         except Exception as e:
             logger.error(f"Failed to update database registry: {e}")
             await db_session.rollback()
+
+    async def _load_catalog_from_db(self, db_session) -> Tuple[List[Dict[str, Any]], Optional[datetime]]:
+        """
+        Load agent catalog from database snapshot.
+        Returns (agents_list, last_refreshed_timestamp)
+        """
+        try:
+            from sqlalchemy import select
+            from app.models.agent_config import AgentRegistry as DBAgentRegistry
+            result = await db_session.execute(select(DBAgentRegistry))
+            rows = result.scalars().all()
+            agents: List[Dict[str, Any]] = []
+            last_seen_values: List[datetime] = []
+            for r in rows:
+                if getattr(r, 'last_seen', None):
+                    last_seen_values.append(r.last_seen)
+                agents.append({
+                    "name": r.agent_name,
+                    "version": r.version,
+                    "description": r.description,
+                    "category": r.category,
+                    "enabled": r.enabled_by_default,
+                    "priority": r.priority,
+                    "estimated_tokens": r.estimated_tokens,
+                    "requires_document": r.requires_document,
+                    "requires_components": r.requires_components,
+                    "metrics": {
+                        "total_executions": 0,
+                        "success_rate": 0.0,
+                        "avg_threats": 0.0,
+                        "avg_execution_time": 0.0,
+                        "total_tokens_used": 0,
+                        "last_executed": None
+                    }
+                })
+            last_refreshed = max(last_seen_values) if last_seen_values else None
+            return agents, last_refreshed
+        except Exception as e:
+            logger.warning(f"Failed to load catalog from DB: {e}")
+            return [], None
+
+    async def get_cached_catalog(self, db_session, max_age_seconds: int = 30) -> Dict[str, Any]:
+        """
+        Return cached agent catalog if fresh, otherwise load from DB snapshot.
+        Includes metadata: last_refreshed and refresh_in_progress.
+        """
+        now = asyncio.get_event_loop().time()
+        use_cache = (
+            self._catalog_cache is not None and 
+            self._catalog_cached_at is not None and 
+            (now - self._catalog_cached_at) < max_age_seconds
+        )
+        if use_cache:
+            categories = sorted({a["category"] for a in self._catalog_cache})
+            enabled_count = sum(1 for a in self._catalog_cache if a.get("enabled"))
+            return {
+                "agents": self._catalog_cache,
+                "total": len(self._catalog_cache),
+                "categories": categories,
+                "enabled_count": enabled_count,
+                "source": "cache",
+                "last_refreshed": (self._last_refresh.isoformat() if self._last_refresh else None),
+                "refresh_in_progress": self._refresh_in_progress,
+            }
+
+        # Load from DB and populate cache
+        agents, last_refreshed = await self._load_catalog_from_db(db_session)
+        if agents:
+            self._catalog_cache = agents
+            self._catalog_cached_at = asyncio.get_event_loop().time()
+            self._last_refresh = last_refreshed or datetime.utcnow()
+            categories = sorted({a["category"] for a in agents})
+            enabled_count = sum(1 for a in agents if a.get("enabled"))
+            return {
+                "agents": agents,
+                "total": len(agents),
+                "categories": categories,
+                "enabled_count": enabled_count,
+                "source": "db",
+                "last_refreshed": (self._last_refresh.isoformat() if self._last_refresh else None),
+                "refresh_in_progress": self._refresh_in_progress,
+            }
+        else:
+            return {
+                "agents": [],
+                "total": 0,
+                "categories": [],
+                "enabled_count": 0,
+                "source": "empty",
+                "last_refreshed": None,
+                "refresh_in_progress": self._refresh_in_progress,
+            }
+
+    async def refresh_and_sync(self, db_session) -> None:
+        """Perform discovery and sync results to the database and cache (non-blocking)."""
+        if self._refresh_in_progress:
+            logger.debug("Agent registry refresh already in progress; skipping")
+            return
+        async with self._refresh_lock:
+            self._refresh_in_progress = True
+            try:
+                logger.info("Refreshing agent registry via discovery and syncing to DB...")
+                self.discover_agents()
+                await self.update_database_registry(db_session)
+                # Update cache from DB snapshot
+                agents, last_refreshed = await self._load_catalog_from_db(db_session)
+                if agents:
+                    self._catalog_cache = agents
+                    self._catalog_cached_at = asyncio.get_event_loop().time()
+                    self._last_refresh = last_refreshed or datetime.utcnow()
+                logger.info("Agent registry refresh complete")
+            except Exception as e:
+                logger.error(f"Agent registry refresh failed: {e}")
+            finally:
+                self._refresh_in_progress = False
 
 
 # Global registry instance

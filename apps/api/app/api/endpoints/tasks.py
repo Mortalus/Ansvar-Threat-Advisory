@@ -10,6 +10,8 @@ from app.tasks.pipeline_tasks import execute_pipeline_step, execute_full_pipelin
 from app.tasks.llm_tasks import extract_dfd_task, generate_threats_task
 from app.celery_app import celery_app
 from app.dependencies import get_pipeline_manager
+from app.api.v1.auth import require_permission
+from app.models import PermissionType
 from app.core.pipeline.manager import PipelineManager
 
 logger = logging.getLogger(__name__)
@@ -26,8 +28,13 @@ class TaskResponse(BaseModel):
 
 class BackgroundStepRequest(BaseModel):
     pipeline_id: str
-    step: str
+    # Accept both 'step' and legacy 'step_name' for compatibility with existing frontend
+    step: Optional[str] = None
+    step_name: Optional[str] = None
     data: Optional[Dict[str, Any]] = {}
+
+    class Config:
+        extra = "allow"
 
 
 class BackgroundPipelineRequest(BaseModel):
@@ -38,7 +45,8 @@ class BackgroundPipelineRequest(BaseModel):
 @router.post("/execute-step", response_model=TaskResponse)
 async def execute_step_background(
     request: BackgroundStepRequest,
-    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """
     Execute a single pipeline step in the background
@@ -52,28 +60,33 @@ async def execute_step_background(
         if not pipeline:
             raise HTTPException(status_code=404, detail=f"Pipeline {request.pipeline_id} not found")
         
+        # Resolve step name (support both 'step' and 'step_name')
+        resolved_step = request.step or request.step_name
+        if not resolved_step:
+            raise HTTPException(status_code=400, detail="Missing required field: 'step' or 'step_name'")
+
         # Submit background task
         task = execute_pipeline_step.delay(
             pipeline_id=request.pipeline_id,
-            step=request.step,
-            data=request.data
+            step=resolved_step,
+            data=request.data or {}
         )
         
         # Send WebSocket notification that task was queued
         try:
             from app.api.endpoints.websocket import notify_task_queued
             import asyncio
-            asyncio.create_task(notify_task_queued(request.pipeline_id, task.id, request.step))
+            asyncio.create_task(notify_task_queued(request.pipeline_id, task.id, resolved_step))
         except Exception as e:
             logger.warning(f"Failed to send WebSocket notification: {e}")
         
-        logger.info(f"Queued step {request.step} for pipeline {request.pipeline_id}, task_id: {task.id}")
+        logger.info(f"Queued step {resolved_step} for pipeline {request.pipeline_id}, task_id: {task.id}")
         
         return TaskResponse(
             task_id=task.id,
             pipeline_id=request.pipeline_id,
             status="queued",
-            message=f"Step {request.step} queued for background execution",
+            message=f"Step {resolved_step} queued for background execution",
             submitted_at=datetime.utcnow().isoformat()
         )
         
@@ -87,7 +100,8 @@ async def execute_step_background(
 @router.post("/execute-pipeline", response_model=TaskResponse)
 async def execute_pipeline_background(
     request: BackgroundPipelineRequest,
-    pipeline_manager: PipelineManager = Depends(get_pipeline_manager)
+    pipeline_manager: PipelineManager = Depends(get_pipeline_manager),
+    _perm=Depends(require_permission(PermissionType.PIPELINE_EXECUTE))
 ):
     """
     Execute multiple pipeline steps in sequence in the background

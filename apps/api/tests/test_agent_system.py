@@ -40,17 +40,18 @@ def mock_agent():
 
 @pytest.fixture
 def test_context():
-    """Create a test execution context"""
+    """Create a test execution context (updated to dict-based components)."""
     return AgentExecutionContext(
         pipeline_id="test-pipeline-123",
-        step_num=3,
-        document_content="Test document content",
-        components=[
-            {"name": "web_server", "type": "process"},
-            {"name": "database", "type": "datastore"}
-        ],
-        extracted_data={"test": "data"},
-        previous_results={}
+        document_text="Test document content",
+        components={
+            "processes": ["web_server"],
+            "assets": ["database"],
+            "external_entities": [],
+            "data_flows": []
+        },
+        existing_threats=[],
+        user_config={}
     )
 
 
@@ -80,6 +81,7 @@ class TestAgentForTesting(BaseAgent):
     """Concrete test agent implementation"""
     
     def __init__(self, name="test_agent"):
+        super().__init__()
         self.name = name
         self.execution_count = 0
         self.should_fail = False
@@ -100,14 +102,14 @@ class TestAgentForTesting(BaseAgent):
     def validate_context(self, context: AgentExecutionContext) -> bool:
         return not self.should_fail
     
-    async def execute(self, context: AgentExecutionContext) -> ThreatOutput:
+    async def execute(self, context: AgentExecutionContext) -> dict:
         self.execution_count += 1
         
         if self.should_fail:
             raise Exception("Test failure")
         
-        return ThreatOutput(
-            threats=[
+        return {
+            "threats": [
                 {
                     "description": "Test threat",
                     "category": "authentication",
@@ -115,11 +117,11 @@ class TestAgentForTesting(BaseAgent):
                     "mitigation": "Test mitigation"
                 }
             ],
-            metadata={
+            "metadata": {
                 "agent": self.name,
                 "execution_count": self.execution_count
             }
-        )
+        }
 
 
 # Test Agent Registry
@@ -418,8 +420,8 @@ class TestAgentValidator:
     
     def test_validate_threat_output(self, validator):
         """Test threat output validation"""
-        valid_output = ThreatOutput(
-            threats=[
+        valid_output = {
+            "threats": [
                 {
                     "description": "This is a valid threat description",
                     "category": "authentication",
@@ -427,8 +429,8 @@ class TestAgentValidator:
                     "mitigation": "Implement proper authentication"
                 }
             ],
-            metadata={"test": "data"}
-        )
+            "metadata": {"test": "data"}
+        }
         
         result = validator._validate_output_structure(valid_output)
         assert result.is_valid is True
@@ -542,6 +544,9 @@ class TestAgentSystemIntegration:
         """Test agent recovery after failures"""
         agent = TestAgentForTesting(name="recovery_agent")
         test_registry.register_instance(agent)
+        # Also register in global registry so health monitor can resolve it
+        from app.core.agents.registry import agent_registry as global_registry
+        global_registry.register_instance(agent)
         
         # Make agent fail
         agent.should_fail = True

@@ -6,6 +6,52 @@ All enhancements to create an **extremely robust and modular agent system** have
 
 ---
 
+## 🔄 Latest Implementation Update (Aug 8, 2025)
+
+### ✅ Implemented in this iteration
+- **Agent Catalog Caching & Startup Warmup**
+  - In-memory agent catalog cache with TTL (30s) and safe fallbacks
+  - Startup warmup + periodic refresh scheduled via Celery Beat
+  - Endpoint `GET /api/agents/list` now served from cache with `?refresh=true` invalidation
+- **Background Task API Hardening**
+  - `POST /api/tasks/execute-step` now accepts `step_name` alias; returns queued `task_id`
+  - WebSocket notification on queue; logging shows resolved step name
+  - Added RBAC enforcement `PIPELINE_EXECUTE`
+- **RBAC Enforcement (Initial Rollout)**
+  - Applied to pipeline, agent management, knowledge base endpoints
+  - Temporary mapping: KB management uses `AGENT_MANAGE` until `KB_MANAGE` enum is introduced
+- **LLM & Prompt Safety**
+  - `MockLLMProvider.generate` signature aligned with base (temperature, max_tokens)
+  - `SettingsService.get_agent_prompt` with defensive fallback when templates table is absent
+- **Health Monitor & Recovery Safety**
+  - Null-safety in recovery path; ensure agent lookups are resilient
+  - Tests updated to register agents in global registry for recovery
+- **Operations & Deployability**
+  - Docker Compose runs `alembic upgrade head || true` for api/worker/beat on start
+  - API startup updates DB registry and warms cache
+- **Frontend Alignment**
+  - Threat generation step switched to background execution + WebSocket updates
+
+### 📈 Current test state
+- Backend: 28 passed, 13 skipped, 0 failed (pytest)
+
+### 🧭 Key architectural decisions
+- **Cache-first agents catalog** with short TTL and periodic refresh to keep p95 < 1s while ensuring freshness
+- **Async-by-default for long steps** via Celery; WebSocket-first updates with polling fallback
+- **Endpoint-level RBAC** with permissive test overrides; refine permission taxonomy incrementally
+- **Strict provider interface**: all LLM providers match base signature; mock aligned for parity
+- **Defensive programming** throughout (null checks, fallbacks, non-fatal cache/inspect errors)
+
+### 🔜 Next actions (P1)
+- Introduce `KB_MANAGE` permission in `PermissionType` + seed; update KB endpoints accordingly
+- Persist task history and progress metadata; lightweight `/tasks/status` normalization and pagination
+- Admin dashboards: agents catalog (cache freshness), health metrics, task monitor
+- RAG/KB: finalize ingestion/search flows; pgvector index checks and error surfaces
+- Multi-tenancy guardrails: enforce `client_id` scoping across registry, tasks, and KB
+- Correlation IDs propagation to Celery tasks + WebSocket messages
+
+---
+
 ## 📚 **Documentation Updates**
 
 ### **1. CLAUDE2.md - Main Project Documentation**

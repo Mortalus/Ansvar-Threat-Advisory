@@ -12,7 +12,13 @@ class MockLLMProvider(BaseLLMProvider):
     def __init__(self):
         self.model = "mock-llm-v1"
     
-    async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> LLMResponse:
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+    ) -> LLMResponse:
         """Generate mock threats based on the component in the prompt."""
         
         # Parse component info from prompt

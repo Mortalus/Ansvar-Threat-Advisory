@@ -1,7 +1,13 @@
 """Simple Agents API - Fast endpoint without complex registry dependencies"""
 
-from fastapi import APIRouter
-from typing import Dict, Any
+from fastapi import APIRouter, Depends, Query
+from typing import Dict, Any, List
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.dependencies import get_db
+from app.models.agent_config import AgentRegistry as DBAgentRegistry
+from sqlalchemy import select
+from app.core.agents import agent_registry
 
 router = APIRouter(prefix="/api/agents", tags=["agents-simple"])
 
@@ -68,13 +74,42 @@ MOCK_AGENTS = [
 
 
 @router.get("/list", response_model=Dict[str, Any])
-async def list_agents_simple():
-    """Fast agents endpoint with mock data"""
+async def list_agents_simple(
+    db: AsyncSession = Depends(get_db),
+    refresh: bool = Query(False, description="Force background refresh of agent catalog")
+):
+    """Fast agents endpoint backed by cached DB snapshot; falls back to mock data.
+
+    - Returns cached catalog within TTL for sub-second responses.
+    - If refresh=true, triggers background discovery+sync without blocking the response.
+    """
+    try:
+        # Optionally trigger background refresh (non-blocking)
+        if refresh:
+            try:
+                import asyncio
+                asyncio.create_task(agent_registry.refresh_and_sync(db))
+            except Exception:
+                # Non-fatal
+                pass
+
+        # Serve from cached snapshot (or DB if cache expired)
+        catalog = await agent_registry.get_cached_catalog(db)
+        if catalog and catalog.get("agents"):
+            return catalog
+    except Exception:
+        # Fall through to mock
+        pass
+
+    # Fallback mock response
     return {
         "agents": MOCK_AGENTS,
         "total": len(MOCK_AGENTS),
         "categories": ["architecture", "business", "compliance"],
-        "enabled_count": 3
+        "enabled_count": 3,
+        "source": "mock",
+        "last_refreshed": None,
+        "refresh_in_progress": False,
     }
 
 

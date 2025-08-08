@@ -56,33 +56,24 @@ export function ThreatGenerationStep() {
     }
   }
 
-  // WebSocket connection for real-time agent progress
+  // WebSocket connection for real-time progress
   useEffect(() => {
     if (!currentPipelineId || executionPhase !== 'executing') return
 
     const ws = api.connectWebSocket(currentPipelineId, {
       onMessage: (data) => {
-        if (data.type === 'agent_progress') {
-          setAgentExecutionStatus(data.agent_name, {
-            status: data.status,
-            progress: data.progress,
-            threatsFound: data.threats_found,
-            error: data.error
-          })
-          
-          // Update overall progress
-          const completedAgents = selectedAgents.filter(name => 
-            agentExecutionStatus[name]?.status === 'completed'
-          ).length + (data.status === 'completed' ? 1 : 0)
-          
-          setOverallProgress((completedAgents / selectedAgents.length) * 100)
+        // Align with backend message types
+        if (data.type === 'task_progress' && data.step === 'threat_generation') {
+          const progress = typeof data.progress?.percent === 'number' ? data.progress.percent : undefined
+          setOverallProgress(progress ?? 50)
         }
-        
-        if (data.type === 'threat_generation_complete') {
-          setExecutionPhase('complete')
-          setThreats(data.threats || [])
+
+        if ((data.type === 'step_completed' || data.type === 'task_completed') && data.step === 'threat_generation') {
+          const result = data.result || {}
+          setThreats(result.threats || [])
           setStepStatus('threat_generation', 'complete')
-          setStepResult('threat_generation', data)
+          setStepResult('threat_generation', result)
+          setExecutionPhase('complete')
         }
       },
       onError: (error) => {
@@ -137,38 +128,46 @@ export function ThreatGenerationStep() {
         })
       })
 
-      // Defensive: Check API availability
-      if (!api || !api.generateThreats) {
-        throw new Error('Threat generation API is not available')
+      // Queue background task via tasks API; rely on WS for completion
+      setExecutionPhase('executing')
+
+      await api.executeStepInBackground(currentPipelineId, 'threat_generation', {
+        selected_agents: validAgents,
+      })
+
+      // Fallback polling in case WS is unavailable
+      const start = Date.now()
+      const timeoutMs = 5 * 60 * 1000
+      const pollIntervalMs = 3000
+      const poll = async () => {
+        try {
+          const status = await api.getPipelineStatus(currentPipelineId)
+          const stepInfo = status.steps?.['threat_generation']
+          if (stepInfo?.status === 'completed') {
+            const result = stepInfo.result || {}
+            setThreats(result.threats || [])
+            setStepStatus('threat_generation', 'complete')
+            setStepResult('threat_generation', result)
+            setExecutionPhase('complete')
+            return true
+          }
+        } catch (e) {
+          // Non-fatal; continue polling until timeout
+        }
+        return false
       }
 
-      setExecutionPhase('executing')
-      
-      // Call the API with timeout handling
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out after 5 minutes')), 300000)
-      })
-      
-      const result = await Promise.race([
-        api.generateThreats(currentPipelineId, validAgents),
-        timeoutPromise
-      ])
-      
-      // Defensive: Validate result structure
-      if (!result || typeof result !== 'object') {
-        throw new Error('Invalid response from threat generation API')
-      }
-      
-      const threats = (result as any).threats || []
-      if (!Array.isArray(threats)) {
-        console.warn('Invalid threats array in response:', threats)
-        throw new Error('Invalid threats data received')
-      }
-      
-      setThreats(threats)
-      setStepStatus('threat_generation', 'complete')
-      setStepResult('threat_generation', result)
-      setExecutionPhase('complete')
+      const timer = setInterval(async () => {
+        const done = await poll()
+        if (done || Date.now() - start > timeoutMs) {
+          clearInterval(timer)
+          if (!done) {
+            setError('Threat generation timed out. Please try again.')
+            setStepStatus('threat_generation', 'error', 'Timed out')
+            setExecutionPhase('error')
+          }
+        }
+      }, pollIntervalMs)
       
       console.log(`✅ Threat generation completed. Found ${threats.length} threats.`)
       

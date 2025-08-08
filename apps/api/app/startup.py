@@ -46,6 +46,8 @@ async def initialize_agent_registry():
         # Optionally, save agent metadata to database for the management interface
         async with AsyncSessionLocal() as session:
             await agent_registry.update_database_registry(session)
+            # Warm the cache from DB snapshot for fast list responses
+            await agent_registry.get_cached_catalog(session)
             
         logger.info("✅ Agent registry database updated")
         
@@ -70,6 +72,17 @@ def run_startup_tasks():
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     new_loop.run_until_complete(initialize_default_data())
+                    # Schedule periodic registry refresh every 60 seconds (non-blocking)
+                    async def periodic_refresh():
+                        from app.core.agents import agent_registry
+                        while True:
+                            try:
+                                async with AsyncSessionLocal() as session:
+                                    await agent_registry.refresh_and_sync(session)
+                            except Exception as e:
+                                logger.warning(f"Agent registry periodic refresh failed: {e}")
+                            await asyncio.sleep(60)
+                    new_loop.create_task(periodic_refresh())
                     new_loop.close()
                 
                 thread = threading.Thread(target=run_in_thread)
@@ -77,11 +90,33 @@ def run_startup_tasks():
                 thread.join()
             else:
                 loop.run_until_complete(initialize_default_data())
+                # Schedule periodic registry refresh in this loop
+                async def periodic_refresh():
+                    from app.core.agents import agent_registry
+                    while True:
+                        try:
+                            async with AsyncSessionLocal() as session:
+                                await agent_registry.refresh_and_sync(session)
+                        except Exception as e:
+                            logger.warning(f"Agent registry periodic refresh failed: {e}")
+                        await asyncio.sleep(60)
+                loop.create_task(periodic_refresh())
         except RuntimeError:
             # No loop is running, create a new one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(initialize_default_data())
+            # Schedule periodic registry refresh in this loop
+            async def periodic_refresh():
+                from app.core.agents import agent_registry
+                while True:
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            await agent_registry.refresh_and_sync(session)
+                    except Exception as e:
+                        logger.warning(f"Agent registry periodic refresh failed: {e}")
+                    await asyncio.sleep(60)
+            loop.create_task(periodic_refresh())
             loop.close()
     except Exception as e:
         logger.error(f"Error running startup tasks: {str(e)}")

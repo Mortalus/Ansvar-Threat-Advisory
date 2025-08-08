@@ -2,6 +2,24 @@
 
 ## Current Status: ✅ FUNCTIONAL WITH WORKAROUND
 
+> Status delta (Aug 8, 2025)
+- **Implemented**
+  - Agent catalog caching with startup warmup and periodic refresh
+  - Background step execution endpoint hardened with `step_name` alias and RBAC
+  - Initial RBAC coverage across pipeline, agents, and KB (KB uses AGENT_MANAGE temporarily)
+  - Docker Compose auto-migrations on api/worker/beat
+  - Health monitor recovery null-safety; tests stabilized (28 passed)
+- **Outstanding**
+  - Introduce `KB_MANAGE` permission and seed data; update KB endpoints to use it
+  - Persisted task history + richer `/tasks/status` (progress, pagination)
+  - Admin dashboards: agents cache freshness, task monitor, health metrics
+  - RAG/KB ingestion hardening and pgvector checks; multi-tenant scoping
+  - Correlation IDs propagation to Celery + WebSocket
+- **Architecture decisions**
+  - Cache-first agents catalog (TTL 30s) with periodic refresh to keep p95 < 1s
+  - Async-by-default long steps via Celery; WS-first updates, polling fallback
+  - Defensive programming principles applied to endpoints and recovery paths
+
 ### Root Issue Identified
 The Projects interface has a **SQLAlchemy connection pooling issue** that causes intermittent database connection failures. This affects the `/api/projects/` endpoints but does not impact the core threat modeling functionality.
 

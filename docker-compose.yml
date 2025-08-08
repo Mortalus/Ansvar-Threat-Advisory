@@ -78,6 +78,7 @@ services:
       - api_uploads:/app/uploads
     command: >
       sh -c "
+        alembic upgrade head || true;
         uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 
@@ -103,7 +104,11 @@ services:
       - ./inputs:/app/inputs
       - ./outputs:/app/outputs
       - api_uploads:/app/uploads
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    command: >
+      sh -c "
+        alembic upgrade head || true;
+        celery -A app.celery_app worker --loglevel=info --concurrency=2
+      "
 
   # Celery Beat (optional - for scheduled tasks)
   celery-beat:
@@ -126,7 +131,11 @@ services:
     volumes:
       - ./inputs:/app/inputs
       - ./outputs:/app/outputs
-    command: celery -A app.celery_app beat --loglevel=info
+    command: >
+      sh -c "
+        alembic upgrade head || true;
+        celery -A app.celery_app beat --loglevel=info
+      "
 
   # Celery Flower - Task monitoring UI
   celery-flower:

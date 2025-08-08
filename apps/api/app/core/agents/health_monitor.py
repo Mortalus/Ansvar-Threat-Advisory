@@ -264,7 +264,7 @@ class AgentHealthMonitor:
                 logger.info(f"Reset {agent_name} to default configuration")
             
             # Strategy 2: Clear any cached data
-            if hasattr(agent, 'clear_cache'):
+            if agent and hasattr(agent, 'clear_cache'):
                 agent.clear_cache()
                 logger.info(f"Cleared cache for {agent_name}")
             
@@ -274,7 +274,7 @@ class AgentHealthMonitor:
                 logger.info(f"Applied custom recovery strategy for {agent_name}")
             
             # Test if recovery worked
-            if await self.check_agent_health(agent):
+            if agent and await self.check_agent_health(agent):
                 logger.info(f"✅ Recovery successful for {agent_name}")
                 metrics.consecutive_failures = 0
                 metrics.circuit_breaker_state = "closed"
