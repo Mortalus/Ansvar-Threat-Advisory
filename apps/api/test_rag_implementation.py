@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from app.database import AsyncSessionLocal
 from app.services.ingestion_service import IngestionService
 from app.services.prompt_service import PromptService
-from app.core.pipeline.steps.threat_generator import ThreatGenerator
 from app.models import KnowledgeBaseEntry, Prompt, ThreatFeedback, ValidationAction
 from app.startup import initialize_default_data
 

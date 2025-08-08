@@ -20,7 +20,7 @@ try:
     from app.database import AsyncSessionLocal
     from app.services.ingestion_service import IngestionService
     from app.services.prompt_service import PromptService
-    from app.core.pipeline.steps.threat_generator import ThreatGenerator
+    from app.core.pipeline.steps.threat_generator_v3 import ThreatGeneratorV3
     from app.models import KnowledgeBaseEntry, Prompt, ThreatFeedback
     print("✅ All core imports successful")
 except Exception as e:
