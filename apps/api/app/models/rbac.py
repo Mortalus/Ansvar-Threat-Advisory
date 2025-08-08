@@ -78,6 +78,23 @@ class PermissionType(str, enum.Enum):
     CLIENT_PROJECT_VIEW = "client:project_view"
     CLIENT_REPORT_VIEW = "client:report_view"
     CLIENT_REPORT_DOWNLOAD = "client:report_download"
+    
+    # Workflow Engine Permissions
+    # Template Management (Admin only)
+    WORKFLOW_TEMPLATE_CREATE = "workflow_template:create"
+    WORKFLOW_TEMPLATE_VIEW = "workflow_template:view"
+    WORKFLOW_TEMPLATE_EDIT = "workflow_template:edit"
+    WORKFLOW_TEMPLATE_DELETE = "workflow_template:delete"
+    
+    # Workflow Execution (Users)
+    WORKFLOW_RUN_CREATE = "workflow_run:create"
+    WORKFLOW_RUN_VIEW = "workflow_run:view"
+    WORKFLOW_RUN_CONTROL = "workflow_run:control"  # Start/stop/pause
+    WORKFLOW_RUN_DELETE = "workflow_run:delete"
+    
+    # Artifact Access
+    WORKFLOW_ARTIFACT_VIEW = "workflow_artifact:view"
+    WORKFLOW_ARTIFACT_DOWNLOAD = "workflow_artifact:download"
 
 
 class Role(BaseModel):

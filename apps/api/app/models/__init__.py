@@ -9,6 +9,10 @@ from .knowledge_base import KnowledgeBaseEntry
 from .threat_feedback import ThreatFeedback, ValidationAction
 from .project import Project, ProjectSession, SessionSnapshot
 from .agent_config import AgentConfiguration, AgentPromptVersion, AgentExecutionLog, AgentRegistry
+from .workflow import (
+    WorkflowTemplate, WorkflowRun, WorkflowStepExecution, WorkflowArtifact,
+    WorkflowStatus, StepStatus, WorkflowPermissionType
+)
 
 __all__ = [
     "Base",
@@ -37,5 +41,12 @@ __all__ = [
     "AgentConfiguration",
     "AgentPromptVersion", 
     "AgentExecutionLog",
-    "AgentRegistry"
+    "AgentRegistry",
+    "WorkflowTemplate",
+    "WorkflowRun", 
+    "WorkflowStepExecution",
+    "WorkflowArtifact",
+    "WorkflowStatus",
+    "StepStatus",
+    "WorkflowPermissionType"
 ]

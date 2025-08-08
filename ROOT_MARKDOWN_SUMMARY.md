@@ -138,3 +138,6 @@ This document summarizes every `.md` file located in the repository root.
 
 ## UX_UI_Future_Improvements.md
 - Future UX/UI plan with Admin Workflow Builder (agents + web search + RAG), RBAC workflow rights, review gates by default, auto-run toggles, and runner/designer mockups. Updated default template to modular agent names and added UI surfacing of prompt-level chaining controls.
+
+## MODULAR_WORKFLOW_ENGINE_PLAN.md
+- Comprehensive 5-phase development plan for implementing a modular workflow engine with DAG support, versioned artifacts, and role-based access control. Leverages existing enterprise components (Celery, SQLAlchemy, agent system) to build admin workflow builder and user execution dashboard with parallel processing capabilities.

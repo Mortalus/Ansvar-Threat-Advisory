@@ -62,6 +62,9 @@ services:
       - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
       - REDIS_URL=redis://redis:6379/0
       - CORS_ORIGINS=http://localhost:3001,http://localhost:3000,http://web:3000
+      - INPUT_PATH=/data/inputs
+      - OUTPUT_PATH=/data/outputs
+      - UPLOAD_PATH=/data/uploads
     env_file:
       - ./apps/api/.env
     secrets:
@@ -73,13 +76,15 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./inputs:/app/inputs
-      - ./outputs:/app/outputs
-      - api_uploads:/app/uploads
+      - ./inputs:/data/inputs:ro
+      - ./outputs:/data/outputs:rw
+      - api_uploads:/data/uploads:rw
+    working_dir: /app
     command: >
       sh -c "
-        alembic upgrade head || true;
-        uvicorn app.main:app --host 0.0.0.0 --port 8000
+        cd /app &&
+        python3 -m alembic upgrade head || true;
+        python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 
   # Celery Worker for background jobs
@@ -91,6 +96,9 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
       - REDIS_URL=redis://redis:6379/0
+      - INPUT_PATH=/data/inputs
+      - OUTPUT_PATH=/data/outputs
+      - UPLOAD_PATH=/data/uploads
     env_file:
       - ./apps/api/.env
     secrets:
@@ -101,13 +109,15 @@ services:
       - redis
       - api
     volumes:
-      - ./inputs:/app/inputs
-      - ./outputs:/app/outputs
-      - api_uploads:/app/uploads
+      - ./inputs:/data/inputs:ro
+      - ./outputs:/data/outputs:rw
+      - api_uploads:/data/uploads:rw
+    working_dir: /app
     command: >
       sh -c "
-        alembic upgrade head || true;
-        celery -A app.celery_app worker --loglevel=info --concurrency=2
+        cd /app &&
+        python3 -m alembic upgrade head || true;
+        python3 -m celery -A app.celery_app worker --loglevel=info --concurrency=2
       "
 
   # Celery Beat (optional - for scheduled tasks)
@@ -119,6 +129,9 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://threat_user:secure_password_123@postgres:5432/threat_modeling
       - REDIS_URL=redis://redis:6379/0
+      - INPUT_PATH=/data/inputs
+      - OUTPUT_PATH=/data/outputs
+      - UPLOAD_PATH=/data/uploads
     env_file:
       - ./apps/api/.env
     secrets:
@@ -129,12 +142,14 @@ services:
       - redis
       - api
     volumes:
-      - ./inputs:/app/inputs
-      - ./outputs:/app/outputs
+      - ./inputs:/data/inputs:ro
+      - ./outputs:/data/outputs:rw
+    working_dir: /app
     command: >
       sh -c "
-        alembic upgrade head || true;
-        celery -A app.celery_app beat --loglevel=info
+        cd /app &&
+        python3 -m alembic upgrade head || true;
+        python3 -m celery -A app.celery_app beat --loglevel=info
       "
 
   # Celery Flower - Task monitoring UI

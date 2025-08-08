@@ -37,11 +37,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/uploads /app/outputs/exports /app/outputs/reports /app/outputs/temp
-# Create sentence-transformers cache directory with proper permissions
-RUN mkdir -p /tmp/sentence_transformers_cache && chmod 777 /tmp/sentence_transformers_cache
-RUN chown -R appuser:appuser /app
+# Create necessary directories - Keep app directories separate from data volumes
+RUN mkdir -p /app/static_uploads /app/static_outputs \
+    && mkdir -p /data/inputs /data/outputs /data/uploads \
+    && mkdir -p /tmp/sentence_transformers_cache && chmod 777 /tmp/sentence_transformers_cache \
+    && chown -R appuser:appuser /app /data
 
 # Set environment variable for sentence-transformers cache
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers_cache
