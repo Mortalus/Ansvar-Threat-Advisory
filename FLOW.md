@@ -2,8 +2,6 @@
 
 This document provides a comprehensive overview of how the Threat Modeling Pipeline application works, from project creation to final threat reports.
 
-Update (Aug 2025): The UI follows a pipeline-first flow. Create pipelines via `/api/pipeline/create`, execute long steps via `/api/tasks/execute-step`, and receive progress over `/ws/{pipeline_id}`. Frontend default: http://localhost:3001.
-
 ## 📋 **High-Level Architecture Overview**
 
 ```
