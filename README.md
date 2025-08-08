@@ -6,12 +6,14 @@ A robust AI-powered threat modeling pipeline that processes security documents t
 
 - 📄 **Document Processing**: Support for PDF, DOCX, and TXT files
 - 🤖 **Multi-LLM Support**: Ollama (local), Azure OpenAI, and Scaleway
-- 🔄 **5-Step Pipeline**:
+- 🔄 **7-Step Pipeline**:
   1. Document Upload
   2. DFD Extraction
-  3. Threat Generation (STRIDE)
-  4. Threat Refinement
-  5. Attack Path Analysis
+  3. DFD Review (interactive)
+  4. Agent Configuration (select agents)
+  5. Threat Generation (multi-agent)
+  6. Threat Refinement
+  7. Attack Path Analysis (optional)
 - ⚡ **Real-time Updates**: WebSocket support for live pipeline status
 - 🎨 **Modern UI**: Dark theme with gradient accents
 - 🔧 **Flexible Configuration**: Different LLM providers per step
@@ -64,9 +66,9 @@ cp apps/web/.env.local.example apps/web/.env.local
 ### Running the Application
 
 #### Option 1: Using Docker (Recommended)
-\`\`\`bash
-docker-compose up
-\`\`\`
+```bash
+./docker-start.sh
+```
 
 #### Option 2: Manual Setup
 
@@ -100,9 +102,18 @@ npm run dev
 
 ### Access the Application
 
-- **Web UI**: http://localhost:3000
+- **Web UI**: http://localhost:3001
 - **API Documentation**: http://localhost:8000/docs
-- **WebSocket**: ws://localhost:8000/ws
+- **WebSocket**: ws://localhost:8000/ws/{pipeline_id}
+
+### Pipeline-first integration
+
+The UI and API use a pipeline-first flow with background execution:
+- Create: `POST /api/pipeline/create`
+- Execute step (background): `POST /api/tasks/execute-step`
+- Execute step (sync): `POST /api/pipeline/{id}/step/{step}`
+- Status: `GET /api/pipeline/{id}/status`
+- WebSocket: `/ws/{pipeline_id}`
 
 ## Configuration
 

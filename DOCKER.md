@@ -27,7 +27,7 @@ docker-compose --version
 
 ## 🏗️ Architecture
 
-The Docker setup includes **7 services**:
+The Docker setup includes **8 services**:
 
 1. **PostgreSQL** - Persistent database storage
 2. **Redis** - Message broker and cache
@@ -36,7 +36,7 @@ The Docker setup includes **7 services**:
 5. **Celery Beat** - Scheduled task runner (optional)
 6. **Celery Flower** - Task monitoring UI
 7. **Next.js Frontend** - Web interface
-8. **Ollama** - Local LLM (optional with `--profile ollama`)
+8. **Ollama** - Local LLM (optional)
 
 ## 📋 Services Overview
 

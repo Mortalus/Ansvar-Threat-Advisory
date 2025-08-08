@@ -50,11 +50,11 @@
 
 ### **Prerequisites**
 - ✅ Backend services running on `localhost`
-- ✅ Frontend running on `http://localhost:3002`
+- ✅ Frontend running on `http://localhost:3001`
 - ✅ All endpoints responding (confirmed by automated tests)
 
 ### **Step 1: Document Upload**
-1. Navigate to `http://localhost:3002`
+1. Navigate to `http://localhost:3001`
 2. Upload a test document (PDF or TXT)
 3. ✅ **Expected**: File processes successfully, pipeline ID created
 4. ⚠️  **Watch for**: Upload errors, missing pipeline ID

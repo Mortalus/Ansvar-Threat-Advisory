@@ -1,5 +1,7 @@
 Current Project State & Development Guide
 Project Overview
+
+Note (Aug 2025): Frontend now uses the pipeline-first APIs (`/api/pipeline/*`, `/api/tasks/*`) with WebSocket updates. Default frontend port is 3001.
 A **Production-Ready** RAG-Powered Threat Modeling Pipeline application with enterprise-grade Docker deployment for processing security documents through an AI-powered analysis pipeline. The application now features **Retrieval-Augmented Generation (RAG)** with threat intelligence, persistent database storage, background job processing, and real-time notifications in a complete Docker-based architecture designed for privacy-conscious organizations.
 
 🐳 **DOCKER PRODUCTION DEPLOYMENT READY** 

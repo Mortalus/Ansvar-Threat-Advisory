@@ -21,7 +21,7 @@
   - Defensive programming principles applied to endpoints and recovery paths
 
 ### Root Issue Identified
-The Projects interface has a **SQLAlchemy connection pooling issue** that causes intermittent database connection failures. This affects the `/api/projects/` endpoints but does not impact the core threat modeling functionality.
+The Projects interface has an intermittent **SQLAlchemy connection pooling issue** affecting `/api/projects/*`. Core pipeline functionality is unaffected.
 
 ### Error Details
 ```
