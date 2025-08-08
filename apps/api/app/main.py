@@ -12,7 +12,7 @@ from app.core.logging_config import setup_logging, LoggingMiddleware, get_logger
 from app.config import settings, get_cors_origins
 
 # Import routers
-from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects, projects_simple, agents_simple
+from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects, projects_simple, agents_simple, agent_management
 from app.api.v1 import auth
 
 # Import startup tasks
@@ -88,6 +88,7 @@ app.include_router(settings.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(projects_simple.router, prefix="/api")
 app.include_router(agents_simple.router)
+app.include_router(agent_management.router)
 
 # Enhanced health check endpoint with database verification
 @app.get("/health")

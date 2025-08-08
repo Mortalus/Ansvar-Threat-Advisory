@@ -173,13 +173,19 @@ async def login(
             detail="Invalid credentials"
         )
     
+    # Get permissions safely without lazy loading
+    permissions = []
+    for role in user.roles:
+        for permission in role.permissions:
+            permissions.append(permission.name)
+    
     return LoginResponse(
         user_id=user.id,
         username=user.username,
         email=user.email,
         full_name=user.full_name,
         roles=[role.name for role in user.roles],
-        permissions=user.get_permissions(),
+        permissions=permissions,
         session_token=session_token
     )
 

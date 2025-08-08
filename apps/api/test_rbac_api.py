@@ -41,7 +41,7 @@ class RBACAPITester:
             self.server_process.wait()
             print("✅ Server stopped")
     
-    async def login(self, username="admin", password="admin123!"):
+    async def login(self, username="admin", password="password123"):
         """Test login endpoint"""
         print(f"\n🔐 Testing login with {username}...")
         
@@ -78,7 +78,7 @@ class RBACAPITester:
                 json={
                     "username": "test_client", 
                     "email": "test@client.com",
-                    "password": "client123!",
+                    "password": "password123",
                     "client_id": "test-corp-001",
                     "client_organization": "Test Corp",
                     "full_name": "Test Client User"
@@ -173,13 +173,13 @@ class RBACAPITester:
         await self.test_create_client_user()
         
         # Try to login as client
-        client_data = await self.login("test_client", "client123!")
+        client_data = await self.login("test_client", "password123")
         if client_data:
             print(f"✅ Client login successful")
             print(f"   Has client permissions: {'client:dashboard_view' in client_data.get('permissions', [])}")
         
         # Restore admin session
-        await self.login("admin", "admin123!")
+        await self.login("admin", "password123")
     
     async def run_all_tests(self):
         """Run all RBAC tests"""

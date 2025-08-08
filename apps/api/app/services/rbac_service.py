@@ -40,8 +40,10 @@ class RBACService:
         Authenticate user and create session
         Returns (User, session_token) or (None, None) if authentication fails
         """
-        # Find user by username or email
-        stmt = select(User).options(selectinload(User.roles)).where(
+        # Find user by username or email with eager loading
+        stmt = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        ).where(
             or_(User.username == username, User.email == username)
         )
         result = await self.session.execute(stmt)
@@ -59,7 +61,17 @@ class RBACService:
                                      success=False, details="No password set")
             return None, None
         
-        if not bcrypt.checkpw(password.encode('utf-8'), user.hashed_password.encode('utf-8')):
+        # Robust password checking with proper encoding
+        try:
+            password_bytes = password.encode('utf-8')
+            hash_bytes = user.hashed_password.encode('utf-8')
+            password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+        except Exception as e:
+            await self._log_auth_event("login_failed", user.id, ip_address, user_agent,
+                                     success=False, details=f"Password check error: {str(e)}")
+            return None, None
+        
+        if not password_valid:
             # Increment failed login attempts
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
@@ -90,7 +102,9 @@ class RBACService:
         Validate session token and return user if valid
         Updates last_accessed timestamp
         """
-        stmt = select(UserSession).options(selectinload(UserSession.user).selectinload(User.roles)).where(
+        stmt = select(UserSession).options(
+            selectinload(UserSession.user).selectinload(User.roles).selectinload(Role.permissions)
+        ).where(
             and_(
                 UserSession.session_token == session_token,
                 UserSession.is_active == True,
@@ -345,20 +359,26 @@ class RBACService:
     # Query Methods
     
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
-        """Get user by ID with roles loaded"""
-        stmt = select(User).options(selectinload(User.roles)).where(User.id == user_id)
+        """Get user by ID with roles and permissions loaded"""
+        stmt = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        ).where(User.id == user_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
     
     async def get_user_by_username(self, username: str) -> Optional[User]:
-        """Get user by username with roles loaded"""
-        stmt = select(User).options(selectinload(User.roles)).where(User.username == username)
+        """Get user by username with roles and permissions loaded"""
+        stmt = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        ).where(User.username == username)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
     
     async def list_users(self) -> List[User]:
-        """List all users with their roles"""
-        stmt = select(User).options(selectinload(User.roles))
+        """List all users with their roles and permissions"""
+        stmt = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
     
