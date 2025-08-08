@@ -158,11 +158,39 @@ docker-compose logs api
 docker-compose logs celery-worker
 ```
 
+**Authentication/Login Failures (500 errors, "login failed"):**
+```bash
+# Common cause: asyncpg connection pool race conditions
+# Quick fix:
+docker-compose restart api
+sleep 15
+docker-compose exec api python -m app.core.init_rbac
+
+# Test login:
+curl -X POST http://localhost/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123!"}'
+
+# If persistent, rebuild API:
+docker-compose build api --no-cache
+docker-compose up -d api
+```
+
 **Database connection issues:**
 ```bash
-# Reset database
+# For "another operation is in progress" errors:
+docker-compose restart api  # Clears connection pool
+
+# Full reset if needed:
 docker-compose down -v
 ./docker-start.sh start
+```
+
+**Module Import Errors:**
+```bash
+# After adding new Python files, rebuild:
+docker-compose build api
+docker-compose up -d api
 ```
 
 **Port conflicts:**

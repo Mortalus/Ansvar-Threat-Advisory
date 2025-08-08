@@ -156,6 +156,34 @@ async def check_connection_health():
 asyncio.run(check_connection_health())
 ```
 
+### **Asyncpg Connection Pool Recovery**
+
+**Issue**: "another operation is in progress" errors with asyncpg
+
+**Immediate Recovery**:
+```bash
+# Quick restart to clear connection pool
+docker-compose restart api
+
+# Re-initialize RBAC if authentication fails
+docker-compose exec api python -m app.core.init_rbac
+```
+
+**Robust Connection Manager** (implemented in `/app/core/db_connection_manager.py`):
+- Uses NullPool to avoid asyncpg pooling issues
+- Automatic fallback to direct asyncpg connections
+- Connection reinitialization on failure
+- Multiple retry strategies
+
+**Monthly Connection Pool Health Check**:
+```bash
+# Check for connection pool errors in logs
+docker-compose logs api | grep -E "another operation|Event loop|InterfaceError" | tail -20
+
+# Monitor connection pool metrics
+curl http://localhost:8000/health | jq '.database'
+```
+
 ---
 
 ## 🚨 **Error Monitoring & Response**

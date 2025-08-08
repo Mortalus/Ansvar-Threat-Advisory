@@ -237,9 +237,23 @@ Refined Threats → 🛤️ Path Discovery → 🔗 Chain Analysis → 🎯 Crit
 - **`system_prompt_templates`**: LLM prompt management
 - **`threat_feedback`**: User validation and learning
 
+### **Robust Connection Management:**
+- **Connection Manager** (`/app/core/db_connection_manager.py`):
+  - NullPool configuration to prevent asyncpg race conditions
+  - Automatic fallback strategies (reinitialize → direct connection)
+  - Connection health monitoring and recovery
+  - Event loop safe operations
+
 ### **Data Flow:**
 ```
 Pipeline Creation → Step Execution → Result Storage → Status Updates → WebSocket Notifications
+```
+
+### **Connection Recovery Flow:**
+```
+Request → Try SQLAlchemy Session → On Failure → Reinitialize Engine → On Failure → Direct Asyncpg Connection
+         ↓                                     ↓                                  ↓
+    [Success]                            [Retry Request]                    [Fallback Mode]
 ```
 
 ---
