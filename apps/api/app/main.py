@@ -12,11 +12,11 @@ from app.core.logging_config import setup_logging, LoggingMiddleware, get_logger
 from app.config import settings, get_cors_origins
 
 # Import routers
-from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects, projects_simple, agents_simple, agent_management, simple_workflows
+from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects, projects_simple, agents_simple, agent_management, simple_workflows, workflows
 from app.api.v1 import auth
 
 # Import startup tasks
-from app.startup import run_startup_tasks
+# Startup tasks imported within lifespan context to avoid circular imports
 
 # Phase 2: Configure structured logging
 setup_logging(
@@ -35,8 +35,13 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Threat Modeling API...")
     
     # Startup actions
+    logger.info("🔄 Initializing database connections...")
+    from app.core.db_connection_manager import get_connection_manager
+    manager = await get_connection_manager()
+    
     logger.info("🔄 Initializing default data...")
-    run_startup_tasks()
+    from app.startup import initialize_default_data_robust
+    await initialize_default_data_robust()
     logger.info("✅ Application startup completed")
     
     yield
@@ -44,8 +49,8 @@ async def lifespan(app: FastAPI):
     # Phase 2.1: Graceful shutdown with connection cleanup
     logger.info("🔄 Shutting down Threat Modeling API...")
     try:
-        from app.database import close_db_connections
-        await close_db_connections()
+        from app.core.db_connection_manager import cleanup_connections
+        await cleanup_connections()
         logger.info("✅ Graceful shutdown completed")
     except Exception as e:
         logger.warning(f"⚠️ Shutdown warning (non-critical): {e}")
@@ -90,6 +95,7 @@ app.include_router(projects_simple.router, prefix="/api")
 app.include_router(agents_simple.router)
 app.include_router(agent_management.router)
 app.include_router(simple_workflows.router, prefix="/api/simple-workflows", tags=["Simple Workflows"])
+app.include_router(workflows.router, prefix="/api/workflows", tags=["Workflows"])
 
 # Enhanced health check endpoint with database verification
 @app.get("/health")

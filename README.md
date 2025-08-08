@@ -167,6 +167,20 @@ threat-modeling-platform/
 \`\`\`
 
 ## Development
+### Default Workflow Template
+
+At startup, the system seeds a default template named "Threat Modeling (Standard)" with a modular multi-agent flow:
+
+- Document Analysis (`document_analysis`)
+- DFD Extraction (`data_flow_analysis`)
+- Architectural Risk (`architectural_risk`)
+- Business & Financial (`business_financial`)
+- Compliance & Governance (`compliance_governance`)
+- Threat Refinement (`threat_refinement`)
+- Attack Path Analysis (optional) (`attack_path_analyzer`)
+
+Prompt-level chaining is controlled via step `optional_parameters` (e.g., `existing_threats_limit`) so each agent consumes a bounded subset of prior outputs.
+
 
 ### Backend Development
 \`\`\`bash

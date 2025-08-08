@@ -88,7 +88,7 @@ flowchart TB
 
 ## Concrete Improvements List
 - **Platform Unification**: Refactor frontend `api.ts` and `store.ts` to use `/api/pipeline/*`, `/api/tasks/*`, `/ws/{pipeline_id}` exclusively.
-- **Workflow Builder UI**: Implement `admin/workflow-builder` designer with drag/drop, step properties, and persistence to `workflow_templates`.
+- **Workflow Builder UI**: Implement `admin/workflow-builder` designer with drag/drop, step properties, and persistence to `workflow_templates`. Surface prompt chaining controls per step, e.g. `optional_parameters.existing_threats_limit`.
 - **Workflow Execution UI**: Implement `admin/workflow-executions` + client runner page. Link to `workflow_executions` and tasks.
 - **RBAC Expansion**: Add `KB_MANAGE`, `WORKFLOW_MANAGE`, `WORKFLOW_EXECUTE`; seed defaults and enforce in endpoints/UI.
 - **Audit Trail UI**: Project/session history with step logs, approvals, feedback, exports.
@@ -102,13 +102,13 @@ flowchart TB
   "name": "Threat Modeling (Standard)",
   "description": "End-to-end threat modeling with DFD, multi-agent threats, refinement, and optional attack paths.",
   "steps": [
-    {"id": "document_upload", "agent_type": "DocumentUploadAgent", "review_required": false, "automation_enabled": true},
-    {"id": "dfd_extraction", "agent_type": "DFDGenerationAgent", "review_required": true, "automation_enabled": false},
-    {"id": "dfd_review", "agent_type": "DFDValidationAgent", "review_required": true, "automation_enabled": false},
-    {"id": "agent_configuration", "agent_type": "Selection", "review_required": false, "automation_enabled": false},
-    {"id": "threat_generation", "agent_type": "ThreatIdentificationAgent", "review_required": true, "automation_enabled": false, "rag": {"sources": ["CISA_KEV", "CWE"], "top_k": 5}, "web_search": {"enabled": true}},
-    {"id": "threat_refinement", "agent_type": "MitigationAgent", "review_required": true, "automation_enabled": false},
-    {"id": "attack_path_analysis", "agent_type": "AttackPathAnalyzer", "review_required": false, "automation_enabled": true}
+    {"id": "document_upload", "agent_type": "document_analysis", "review_required": false, "automation_enabled": true},
+    {"id": "dfd_extraction", "agent_type": "data_flow_analysis", "review_required": true, "automation_enabled": false},
+    {"id": "architectural_agent", "agent_type": "architectural_risk", "review_required": true, "automation_enabled": false, "optional_parameters": {"existing_threats_limit": 50}},
+    {"id": "business_agent", "agent_type": "business_financial", "review_required": true, "automation_enabled": false, "optional_parameters": {"existing_threats_limit": 50}},
+    {"id": "compliance_agent", "agent_type": "compliance_governance", "review_required": true, "automation_enabled": false, "optional_parameters": {"existing_threats_limit": 50}},
+    {"id": "threat_refinement", "agent_type": "threat_refinement", "review_required": true, "automation_enabled": false},
+    {"id": "attack_path_analysis", "agent_type": "attack_path_analyzer", "review_required": false, "automation_enabled": true}
   ],
   "automation_settings": {"default_auto": false, "confidence_threshold": 0.9},
   "client_access_rules": {"roles": ["Analyst", "Administrator"], "clients": "any"}

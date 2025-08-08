@@ -150,7 +150,7 @@ async def update_workflow_template(
     template_id: UUID,
     template_data: WorkflowTemplateUpdate,
     workflow_manager: WorkflowManager = Depends(get_workflow_manager),
-    current_user: User = Depends(require_permission(PermissionType.PIPELINE_MODIFY))
+    current_user: User = Depends(require_permission(PermissionType.PIPELINE_EDIT))
 ):
     """Update workflow template (Admin only)"""
     try:
@@ -267,7 +267,7 @@ async def perform_step_action(
     step_index: int,
     action: WorkflowStepAction,
     workflow_manager: WorkflowManager = Depends(get_workflow_manager),
-    current_user: User = Depends(require_permission(PermissionType.PIPELINE_MODIFY))
+    current_user: User = Depends(require_permission(PermissionType.PIPELINE_EDIT))
 ):
     """Perform action on workflow step (approve, reject, retry, skip)"""
     try:

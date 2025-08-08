@@ -56,29 +56,25 @@ else:
         # Enhanced cleanup configuration
         pool_reset_on_return='commit', # Reset connections properly
     )
-    # BULLETPROOF CONNECTION POOL - Fixed for asyncpg race conditions
+    # ROBUST CONNECTION POOL - Fixed for asyncpg event loop issues
     async_engine = create_async_engine(
         ASYNC_DATABASE_URL, 
-        # Connection pool configuration optimized for asyncpg
-        pool_pre_ping=False,          # Disabled - causes race conditions with asyncpg
-        pool_recycle=1800,            # Recycle connections every 30 minutes
-        pool_size=10,                 # Larger pool to reduce connection contention
-        max_overflow=5,               # Some overflow to handle bursts
-        pool_timeout=30,              # Longer timeout for connection acquisition
+        # Use NullPool to avoid connection pool issues with asyncpg
+        poolclass=NullPool,           # No connection pooling - create new connections
         
         # Asyncpg-specific configuration to prevent race conditions
         connect_args={
             "server_settings": {
-                "application_name": "threat_modeling_api_fixed",
+                "application_name": "threat_modeling_api_robust",
                 "jit": "off",
                 "statement_timeout": "60s",     # Longer for complex operations
                 "idle_in_transaction_session_timeout": "120s",
             },
             "command_timeout": 30,            # Longer command timeout
+            "max_cached_statement_lifetime": 0,  # Disable statement caching
+            "max_cacheable_statement_size": 0,   # Disable statement caching
         },
         
-        # Enhanced error handling and cleanup
-        pool_reset_on_return='rollback',     # Use rollback for safety
         echo=bool(os.getenv('SQL_DEBUG', False)),
     )
 
@@ -87,7 +83,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine, 
     class_=AsyncSession, 
-    expire_on_commit=False
+    expire_on_commit=False,
+    autoflush=False,
+    autocommit=False
 )
 
 # Create declarative base

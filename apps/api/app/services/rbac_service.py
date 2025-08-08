@@ -18,6 +18,7 @@ from ..models import (
     User, Role, Permission, UserSession, AuditLog,
     RoleType, PermissionType, user_roles
 )
+from ..database import reset_connection_pool, get_resilient_session_with_recovery
 
 
 class RBACService:
@@ -40,14 +41,39 @@ class RBACService:
         Authenticate user and create session
         Returns (User, session_token) or (None, None) if authentication fails
         """
-        # Find user by username or email with eager loading
-        stmt = select(User).options(
-            selectinload(User.roles).selectinload(Role.permissions)
-        ).where(
-            or_(User.username == username, User.email == username)
-        )
-        result = await self.session.execute(stmt)
-        user = result.scalar_one_or_none()
+        async def _query_user(session: AsyncSession) -> Optional[User]:
+            stmt = select(User).options(
+                selectinload(User.roles).selectinload(Role.permissions)
+            ).where(
+                or_(User.username == username, User.email == username)
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+        # First attempt using current session
+        try:
+            user = await _query_user(self.session)
+        except Exception as e:
+            # Defensive recovery for asyncpg InterfaceError: another operation is in progress
+            error_text = str(e)
+            await self._log_auth_event("login_failed", None, ip_address, user_agent,
+                                     success=False, details=f"Session query error: {error_text}")
+            try:
+                # Attempt pool reset then use a fresh resilient session
+                await reset_connection_pool()
+                fresh_session = await get_resilient_session_with_recovery()
+                try:
+                    user = await _query_user(fresh_session)  # type: ignore[arg-type]
+                finally:
+                    # Close fresh session when done
+                    try:
+                        await fresh_session.close()  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+            except Exception as recover_err:
+                await self._log_auth_event("login_failed", None, ip_address, user_agent,
+                                         success=False, details=f"Recovery failed: {recover_err}")
+                return None, None
         
         if not user or not user.is_active or user.account_locked:
             await self._log_auth_event("login_failed", user.id if user else None, 

@@ -77,7 +77,7 @@ This document summarizes every `.md` file located in the repository root.
 - Summarizes merged enhancements for a robust modular agent system, caching, RBAC rollout, async tasks, and UI alignment.
 
 ## MODULAR_WORKFLOW_IMPLEMENTATION_PLAN.md
-- Plan for modular agents, workflow templates, client portal, DB/API schemas, security/auth, automation & metrics, and phased rollout.
+- Plan for modular agents, workflow templates, client portal, DB/API schemas, security/auth, automation & metrics, and phased rollout. Includes seeded default template "Threat Modeling (Standard)" with minimum three agents and prompt-level chaining controls (`optional_parameters.existing_threats_limit`).
 
 ## MODULE_ANALYSIS_Authentication_RBAC.md
 - Analysis of Auth/RBAC module capabilities and endpoints, including sessions, roles/permissions, and audit logging.
@@ -137,4 +137,4 @@ This document summarizes every `.md` file located in the repository root.
 - Current admin UX/UI snapshot: agents, workflow builder/executions, prompts, monitor, users; present gaps and IA mockup.
 
 ## UX_UI_Future_Improvements.md
-- Future UX/UI plan with Admin Workflow Builder (agents + web search + RAG), RBAC workflow rights, review gates by default, auto-run toggles, and runner/designer mockups.
+- Future UX/UI plan with Admin Workflow Builder (agents + web search + RAG), RBAC workflow rights, review gates by default, auto-run toggles, and runner/designer mockups. Updated default template to modular agent names and added UI surfacing of prompt-level chaining controls.

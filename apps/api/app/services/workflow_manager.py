@@ -25,7 +25,10 @@ from ..models.workflow_template import (
 from ..core.agents.registry import agent_registry, AgentRegistry
 from ..core.agents.base import BaseAgent, AgentExecutionContext, ThreatOutput
 # from ..services.pipeline_manager import PipelineManager
-from ..services.llm_service import LLMService
+# from ..services.llm_service import LLMService
+# Temporary workaround - using mock LLMService
+class LLMService:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -333,19 +336,41 @@ class WorkflowManager:
         # Get components from previous steps or initial data
         components = execution.data.get('components', [])
         
-        # Get existing threats from previous steps
-        existing_threats = []
+        # Merge step parameters from both legacy 'parameters' and 'optional_parameters'
+        # so templates can supply prompt/input controls regardless of field name.
+        step_parameters: Dict[str, Any] = {}
+        try:
+            if isinstance(step_config.get('parameters'), dict):
+                step_parameters.update(step_config.get('parameters') or {})
+            if isinstance(step_config.get('optional_parameters'), dict):
+                # optional_parameters take precedence when keys overlap
+                step_parameters.update(step_config.get('optional_parameters') or {})
+        except Exception:
+            # Defensive: ignore malformed parameters without failing the step
+            step_parameters = {}
+
+        # Get existing threats from previous steps with optional limit controls
+        existing_threats: List[Dict[str, Any]] = []
         for key, value in execution.data.items():
             if key.startswith('step_') and key.endswith('_result'):
-                if 'threats' in value:
-                    existing_threats.extend(value['threats'])
-        
+                if isinstance(value, dict) and 'threats' in value:
+                    existing_threats.extend(value.get('threats') or [])
+
+        # Apply limit to prior threats to control prompt size if configured
+        try:
+            prior_limit = int(step_parameters.get('existing_threats_limit', 50))
+            if prior_limit > 0 and len(existing_threats) > prior_limit:
+                existing_threats = existing_threats[:prior_limit]
+        except Exception:
+            # Ignore invalid limits
+            pass
+
         return AgentExecutionContext(
             document_text=document_content,
             components=components,
             existing_threats=existing_threats,
             pipeline_id=str(execution.id),
-            user_config=step_config.get('parameters', {})
+            user_config=step_parameters
         )
     
     def _should_automate(

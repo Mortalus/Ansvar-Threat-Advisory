@@ -165,3 +165,25 @@ POST /api/workflows/{execution_id}/step/{step_id}/approve - Approve step results
 - **User Satisfaction**: >90% user approval ratings
 - **Scalability**: Support 10x current workflow volume
 - **Security**: Zero data breaches with full audit compliance
+
+## Default Template: Threat Modeling (Standard)
+
+The system seeds a default workflow template at startup named "Threat Modeling (Standard)" with a minimum of three modular agents and optional steps:
+
+```
+Steps:
+1) Document Upload → agent: document_analysis (automation on)
+2) DFD Extraction (Enhanced) → agent: data_flow_analysis (review gate)
+3) Architectural Risk Agent → agent: architectural_risk (review gate)
+4) Business & Financial Risk Agent → agent: business_financial (review gate)
+5) Compliance & Governance Agent → agent: compliance_governance (review gate)
+6) Threat Refinement → agent: threat_refinement (review gate)
+7) Attack Path Analysis (Optional) → agent: attack_path_analyzer (automation on)
+```
+
+Prompt-level input/output control:
+- Each step may specify `optional_parameters`, e.g. `existing_threats_limit` to cap how many prior threats are fed into the next agent's prompt, keeping chaining controlled at the prompt level.
+- The workflow engine merges `parameters` and `optional_parameters` and enforces reasonable defaults defensively.
+
+Automation policy:
+- Global `automation_settings.enabled` defaults to false (review-by-default). Steps can opt-in to auto-run based on confidence thresholds.

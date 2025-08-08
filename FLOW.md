@@ -136,7 +136,7 @@ Extracted DFD → 👀 User Review → ✏️ Manual Edits → ✅ Validation �
 
 ---
 
-### **Phase 4: Threat Generation (V3 Multi-Agent)**
+### **Phase 4: Threat Generation (Modular Multi-Agent)**
 ```
 DFD Components → 📚 CWE Context Retrieval → 🤖 V2 Context Analysis → 👥 Multi-Agent Analysis → ⚡ Comprehensive Threats
 ```
@@ -158,11 +158,12 @@ DFD Components → 📚 CWE Context Retrieval → 🤖 V2 Context Analysis → �
    - **Concurrent Processing**: Analyze all components simultaneously
    - **UNLIMITED Processing**: No caps on threat generation
 
-   **🔄 Phase 2: Multi-Agent Specialized Analysis**
-   - Service: `apps/api/app/core/pipeline/steps/analyzer_agents.py`
-   - **🏗️ Architectural Risk Agent**: Technical security analysis
-   - **💼 Business Financial Agent**: Business impact assessment
-   - **📋 Compliance Governance Agent**: Regulatory compliance analysis
+   **🔄 Phase 2: Multi-Agent Specialized Analysis (Modular)**
+   - Agent registry executes at least three agents (extensible):
+     - **🏗️ Architectural Risk Agent** (`architectural_risk`)
+     - **💼 Business Financial Agent** (`business_financial`)
+     - **📋 Compliance Governance Agent** (`compliance_governance`)
+   - Prompt-level chaining controls: downstream agents receive a capped subset of prior threats via `optional_parameters.existing_threats_limit` to manage context size.
 
    **🔄 Phase 3: Threat Consolidation**
    - Merge technical and business perspectives
@@ -201,6 +202,7 @@ Raw Threats → 🔍 Deduplication → ⚖️ Risk Assessment → 💼 Business 
 - **Risk Matrix Scoring**: Critical/High/Medium/Low classification
 - **Business Risk Translation**: Technical threats → business language
 - **Implementation Priorities**: Immediate/High/Medium/Low
+ - **Chaining Guardrails**: Refinement can also respect limits passed from prior steps to keep prompts bounded.
 
 **📊 Database Updates:**
 - `Pipeline.refined_threats` = enhanced threat list

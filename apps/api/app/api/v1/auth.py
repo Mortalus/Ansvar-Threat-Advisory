@@ -9,10 +9,11 @@ from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import get_async_session
+from ...core.db_connection_manager import get_robust_session
 
 async def get_db():
-    async for session in get_async_session():
+    """Get database session with robust error handling"""
+    async with get_robust_session() as session:
         yield session
 from ...services.rbac_service import RBACService, PermissionDenied, AuthenticationRequired
 from ...models import User, Role, Permission, RoleType, PermissionType
