@@ -14,7 +14,19 @@ async def create_pipeline(
 ):
     """Create a new pipeline run"""
     try:
-        pipeline_id = await manager.create_pipeline(metadata)
+        # Extract parameters from metadata if provided
+        if metadata:
+            name = metadata.get('name')
+            description = metadata.get('description')
+            owner_id = metadata.get('owner_id')
+        else:
+            name = description = owner_id = None
+            
+        pipeline_id = await manager.create_pipeline(
+            name=name,
+            description=description, 
+            owner_id=owner_id
+        )
         return {
             "pipeline_id": pipeline_id,
             "status": "created",

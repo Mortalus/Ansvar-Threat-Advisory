@@ -1311,7 +1311,7 @@ function HomePageContent() {
       case 'threat_generation':
         return <ThreatGenerationStep />
 
-      case 'threat_generation_old':
+      case 'threat_refinement':
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">

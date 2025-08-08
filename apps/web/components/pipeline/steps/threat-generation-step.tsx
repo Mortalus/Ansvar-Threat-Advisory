@@ -159,7 +159,7 @@ export function ThreatGenerationStep() {
         throw new Error('Invalid response from threat generation API')
       }
       
-      const threats = result.threats || []
+      const threats = (result as any).threats || []
       if (!Array.isArray(threats)) {
         console.warn('Invalid threats array in response:', threats)
         throw new Error('Invalid threats data received')

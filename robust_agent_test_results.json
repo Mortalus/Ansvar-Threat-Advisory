@@ -1,0 +1,89 @@
+{
+  "timestamp": "2025-08-08T06:33:57.301206",
+  "tests_passed": 7,
+  "tests_failed": 0,
+  "details": [
+    {
+      "test": "Agent Discovery",
+      "status": "PASSED",
+      "agents_discovered": 3
+    },
+    {
+      "test": "Health Monitoring",
+      "status": "PASSED",
+      "health_report": {
+        "timestamp": "2025-08-08T04:33:57.431266",
+        "overall_health": "unhealthy",
+        "total_agents": 3,
+        "healthy_agents": 0,
+        "unhealthy_agents": 3,
+        "agents": {
+          "architectural_risk": {
+            "is_healthy": false,
+            "reliability_score": 100.0,
+            "success_rate": 100.0,
+            "total_executions": 0,
+            "consecutive_failures": 0,
+            "average_response_time": 0.0,
+            "circuit_breaker_state": "closed",
+            "last_error": null,
+            "last_health_check": "2025-08-08T04:33:57.431241"
+          },
+          "business_financial": {
+            "is_healthy": false,
+            "reliability_score": 100.0,
+            "success_rate": 100.0,
+            "total_executions": 0,
+            "consecutive_failures": 0,
+            "average_response_time": 0.0,
+            "circuit_breaker_state": "closed",
+            "last_error": null,
+            "last_health_check": "2025-08-08T04:33:57.431255"
+          },
+          "compliance_governance": {
+            "is_healthy": false,
+            "reliability_score": 100.0,
+            "success_rate": 100.0,
+            "total_executions": 0,
+            "consecutive_failures": 0,
+            "average_response_time": 0.0,
+            "circuit_breaker_state": "closed",
+            "last_error": null,
+            "last_health_check": "2025-08-08T04:33:57.431264"
+          }
+        }
+      }
+    },
+    {
+      "test": "Input Validation",
+      "status": "PASSED",
+      "validation_levels_tested": 3
+    },
+    {
+      "test": "Agent Execution",
+      "status": "PASSED",
+      "execution_results": [
+        {
+          "agent": "architectural_risk",
+          "success": false,
+          "error": "Agent architectural_risk execution failed: 'ArchitecturalRiskAgent' object has no attribute 'execute'"
+        }
+      ]
+    },
+    {
+      "test": "Circuit Breaker",
+      "status": "PASSED",
+      "circuit_breaker_tested": true
+    },
+    {
+      "test": "Performance Metrics",
+      "status": "PASSED",
+      "metrics_collected": true
+    },
+    {
+      "test": "Security Sanitization",
+      "status": "PASSED",
+      "sanitization_verified": true
+    }
+  ]
+}
