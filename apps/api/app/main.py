@@ -13,6 +13,7 @@ from app.config import settings, get_cors_origins
 
 # Import routers
 from app.api.endpoints import documents, pipeline, websocket, llm, tasks, threats, knowledge_base, debug, settings, projects, projects_simple, agents_simple
+from app.api.v1 import auth
 
 # Import startup tasks
 from app.startup import run_startup_tasks
@@ -74,6 +75,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(documents.router, prefix="/api")
 app.include_router(pipeline.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")

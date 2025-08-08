@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from app.core.llm import get_llm_provider, test_llm_provider
+from app.core.secrets import get_scaleway_api_key
 import logging
 import os
 
@@ -70,7 +71,7 @@ async def get_llm_config():
             "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT", "not_configured")
         },
         "scaleway": {
-            "configured": bool(os.getenv("SCALEWAY_API_KEY") or os.getenv("SCW_API_KEY")),
+            "configured": bool(get_scaleway_api_key()),
             "endpoint": os.getenv("SCALEWAY_ENDPOINT", "not_configured")
         }
     }

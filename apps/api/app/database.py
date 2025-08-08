@@ -323,28 +323,38 @@ async def reset_connection_pool():
         
         # Strategy 2: Recreate engine with bulletproof configuration
         logger.info("🔄 Step 2: Creating new bulletproof engine")
-        async_engine = create_async_engine(
-            ASYNC_DATABASE_URL,
-            # BULLETPROOF configuration - maximum stability
-            pool_pre_ping=False,
-            pool_recycle=1800,            # 30 minutes
-            pool_size=5,                  # More connections for stability
-            max_overflow=0,               # NO overflow - prevents connection chaos
-            pool_timeout=10,              # Fail fast
-            
-            connect_args={
-                "server_settings": {
-                    "application_name": "threat_modeling_api_bulletproof",
-                    "jit": "off",
-                    "statement_timeout": "30s",
-                    "idle_in_transaction_session_timeout": "60s",
+        if ASYNC_DATABASE_URL.startswith("sqlite"):
+            # SQLite configuration - no pool parameters allowed
+            async_engine = create_async_engine(
+                ASYNC_DATABASE_URL,
+                connect_args={"check_same_thread": False},
+                poolclass=NullPool,
+                echo=bool(os.getenv('SQL_DEBUG', False)),
+            )
+        else:
+            # PostgreSQL configuration with pool parameters
+            async_engine = create_async_engine(
+                ASYNC_DATABASE_URL,
+                # BULLETPROOF configuration - maximum stability
+                pool_pre_ping=False,
+                pool_recycle=1800,            # 30 minutes
+                pool_size=5,                  # More connections for stability
+                max_overflow=0,               # NO overflow - prevents connection chaos
+                pool_timeout=10,              # Fail fast
+                
+                connect_args={
+                    "server_settings": {
+                        "application_name": "threat_modeling_api_bulletproof",
+                        "jit": "off",
+                        "statement_timeout": "30s",
+                        "idle_in_transaction_session_timeout": "60s",
+                    },
+                    "command_timeout": 15,
                 },
-                "command_timeout": 15,
-            },
-            
-            pool_reset_on_return='commit',
-            echo=bool(os.getenv('SQL_DEBUG', False)),
-        )
+                
+                pool_reset_on_return='commit',
+                echo=bool(os.getenv('SQL_DEBUG', False)),
+            )
         
         # Strategy 3: Test the new engine immediately
         logger.info("🔄 Step 3: Testing new connection pool")
@@ -371,13 +381,22 @@ async def reset_connection_pool():
         # Last resort: Try to create a minimal working engine
         try:
             logger.warning("🚨 LAST RESORT: Creating minimal emergency engine")
-            async_engine = create_async_engine(
-                ASYNC_DATABASE_URL,
-                pool_size=1,
-                max_overflow=0,
-                pool_timeout=5,
-                pool_pre_ping=False,
-            )
+            if ASYNC_DATABASE_URL.startswith("sqlite"):
+                # SQLite emergency configuration
+                async_engine = create_async_engine(
+                    ASYNC_DATABASE_URL,
+                    connect_args={"check_same_thread": False},
+                    poolclass=NullPool,
+                )
+            else:
+                # PostgreSQL emergency configuration
+                async_engine = create_async_engine(
+                    ASYNC_DATABASE_URL,
+                    pool_size=1,
+                    max_overflow=0,
+                    pool_timeout=5,
+                    pool_pre_ping=False,
+                )
             AsyncSessionLocal = async_sessionmaker(bind=async_engine, class_=AsyncSession)
             logger.warning("⚠️ Emergency engine created - limited functionality")
             return True
@@ -530,16 +549,26 @@ async def get_resilient_session_with_recovery():
     while retry_count < max_retries:
         try:
             # Create a NEW engine and session maker for this request only
-            fresh_engine = create_async_engine(
-                ASYNC_DATABASE_URL,
-                # Minimal configuration for single-use connection
-                pool_size=1,
-                max_overflow=0,
-                pool_timeout=5,
-                pool_pre_ping=False,
-                pool_recycle=-1,  # Never recycle since it's single-use
-                echo=False,
-            )
+            if ASYNC_DATABASE_URL.startswith("sqlite"):
+                # SQLite configuration - no pool parameters allowed
+                fresh_engine = create_async_engine(
+                    ASYNC_DATABASE_URL,
+                    connect_args={"check_same_thread": False},
+                    poolclass=NullPool,
+                    echo=False,
+                )
+            else:
+                # PostgreSQL configuration with pool parameters
+                fresh_engine = create_async_engine(
+                    ASYNC_DATABASE_URL,
+                    # Minimal configuration for single-use connection
+                    pool_size=1,
+                    max_overflow=0,
+                    pool_timeout=5,
+                    pool_pre_ping=False,
+                    pool_recycle=-1,  # Never recycle since it's single-use
+                    echo=False,
+                )
             
             fresh_session_maker = async_sessionmaker(
                 bind=fresh_engine,

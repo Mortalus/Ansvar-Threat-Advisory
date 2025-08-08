@@ -68,12 +68,13 @@ async def get_llm_provider(step: str = "default") -> BaseLLMProvider:
             )
         
         elif provider_type == "scaleway":
-            api_key = settings.scaleway_api_key or settings.scw_api_key
+            from app.core.secrets import get_scaleway_api_key
+            api_key = get_scaleway_api_key()
             endpoint = settings.scaleway_endpoint
             model = getattr(settings, f"{step_prefix}_scaleway_model", "llama-3.3-70b-instruct")
             
             if not api_key:
-                raise ValueError("Scaleway API key not configured (set SCALEWAY_API_KEY or SCW_API_KEY)")
+                raise ValueError("Scaleway API key not configured (set SCALEWAY_API_KEY, SCW_API_KEY, or create Docker secret 'scaleway_api_key')")
             
             return ScalewayProvider(
                 api_key=api_key,

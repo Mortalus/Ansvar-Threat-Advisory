@@ -357,18 +357,31 @@ async function createPipeline(metadata?: any): Promise<any> {
 }
 
 async function executeStep(pipelineId: string, step: string, data?: any): Promise<any> {
+  // Format the request to match the new backend ExecuteStepRequest model
+  const requestBody = {
+    background: false,
+    data: data || {},
+    // Flatten any additional fields from data to the top level
+    ...data
+  }
+  
+  console.log('🔧 Executing pipeline step:', step, 'for pipeline:', pipelineId, 'with data:', requestBody)
+  
   const response = await fetch(`${API_URL}/api/pipeline/${pipelineId}/step/${step}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data || {})
+    body: JSON.stringify(requestBody)
   })
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Step execution failed' }))
+    console.error('Pipeline step execution failed:', error)
     throw new Error(error.detail || `HTTP ${response.status}`)
   }
   
-  return response.json()
+  const result = await response.json()
+  console.log('✅ Pipeline step completed:', result)
+  return result
 }
 
 async function getPipelineStatus(pipelineId: string): Promise<PipelineStatus> {
@@ -581,6 +594,33 @@ async function initializeDefaultPrompts() {
     method: 'POST'
   })
   if (!response.ok) throw new Error('Failed to initialize default prompts')
+  return response.json()
+}
+
+// Admin Management API Functions
+async function getSystemPrompts() {
+  const response = await fetch(`${API_URL}/api/settings/prompts`)
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to get system prompts' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+async function updateSystemPrompt(id: string, data: {
+  prompt_text: string
+  step_name: string
+  agent_type?: string | null
+}) {
+  const response = await fetch(`${API_URL}/api/settings/prompts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to update system prompt' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
   return response.json()
 }
 
@@ -970,6 +1010,7 @@ export const api = {
   initializeDefaultPrompts,
   
   // Agent Management
+  listAgents: getAvailableAgents,  // Alias for consistency
   getAvailableAgents,
   getAgentConfiguration,
   updateAgentConfiguration,
@@ -977,6 +1018,10 @@ export const api = {
   getAgentExecutionHistory,
   getAgentPerformanceStats,
   reloadAgentConfiguration,
+  
+  // Admin Management
+  getSystemPrompts,
+  updateSystemPrompt,
   
   // Async Task Management
   executeStepInBackground,

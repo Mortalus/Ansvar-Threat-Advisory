@@ -359,58 +359,77 @@ function HomePageContent() {
       // Store files in state
       setUploadedFiles(validFiles)
 
-      // Upload to backend
-      console.log('Uploading files:', validFiles.map(f => f.name))
-      const response = await api.uploadDocuments(validFiles)
+      console.log('📋 PIPELINE-FIRST APPROACH: Creating pipeline and uploading documents')
       
-      console.log('Upload response:', response)
-
-      // Update state based on response
-      console.log('Checking pipeline_id in response:', response.pipeline_id)
-      if (response.pipeline_id) {
-        console.log('Setting pipeline ID:', response.pipeline_id)
-        
-        // BULLETPROOF: Set in both store AND manager
-        setPipelineId(response.pipeline_id)
-        pipelineIdManager.setPipelineId(response.pipeline_id)
-        
-        // Verify it was set
-        const verifyStore = useStore.getState().currentPipelineId
-        const verifyManager = pipelineIdManager.getPipelineId()
-        console.log('Pipeline ID verification - Store:', verifyStore, 'Manager:', verifyManager)
-        
-        if (!verifyStore || !verifyManager) {
-          console.error('❌ CRITICAL: Pipeline ID failed to set properly!')
-          // Force set again
-          useStore.setState({ currentPipelineId: response.pipeline_id })
-          pipelineIdManager.setPipelineId(response.pipeline_id)
-        }
-      } else {
-        console.error('No pipeline_id in upload response!')
+      // STEP 1: Create pipeline first
+      console.log('🔧 Step 1: Creating new pipeline')
+      const pipelineResponse = await api.createPipeline({
+        name: `Threat Model - ${new Date().toISOString()}`,
+        files: validFiles.map(f => ({ name: f.name, size: f.size }))
+      })
+      
+      const pipelineId = pipelineResponse.id || pipelineResponse.pipeline_id
+      if (!pipelineId) {
+        throw new Error('Failed to create pipeline: No ID returned')
       }
+      
+      console.log('✅ Pipeline created:', pipelineId)
+      
+      // BULLETPROOF: Set in both store AND manager immediately
+      setPipelineId(pipelineId)
+      pipelineIdManager.setPipelineId(pipelineId)
 
-      if (response.text_length) {
-        setDocumentText(`Extracted ${response.text_length} characters`)
+      // STEP 2: Upload documents to the pipeline using document upload (for file processing)
+      console.log('🔧 Step 2: Uploading files to pipeline')
+      const uploadResponse = await api.uploadDocuments(validFiles)
+      console.log('✅ Files uploaded:', uploadResponse)
+
+      // STEP 3: Execute document processing step in pipeline
+      console.log('🔧 Step 3: Executing document processing step in pipeline')
+      const processResult = await api.executeStep(pipelineId, 'document_upload', {
+        files: uploadResponse.files,
+        text_length: uploadResponse.text_length,
+        document_text: `Extracted ${uploadResponse.text_length} characters from uploaded files`
+      })
+      
+      console.log('✅ Document processing step completed:', processResult)
+
+      // Update state with all results
+      if (uploadResponse.text_length) {
+        setDocumentText(`Extracted ${uploadResponse.text_length} characters`)
       }
 
       // Store token estimate if available
-      if (response.token_estimate) {
-        setTokenEstimate(response.token_estimate)
+      if (uploadResponse.token_estimate) {
+        setTokenEstimate(uploadResponse.token_estimate)
       }
 
-      // Mark upload as complete
+      // Mark upload as complete with pipeline context
       setStepStatus('document_upload', 'complete')
       setStepResult('document_upload', { 
-        files: response.files,
-        pipeline_id: response.pipeline_id,  // Store pipeline ID in step result for recovery
-        text_length: response.text_length,
-        token_estimate: response.token_estimate
+        pipeline_id: pipelineId,  // Store pipeline ID in step result for recovery
+        files: uploadResponse.files,
+        text_length: uploadResponse.text_length,
+        token_estimate: uploadResponse.token_estimate,
+        processing_result: processResult
       })
 
-      // Stay on document upload step to show completion
+      // Verify pipeline ID persistence
+      const verifyStore = useStore.getState().currentPipelineId
+      const verifyManager = pipelineIdManager.getPipelineId()
+      console.log('🔍 Pipeline ID verification - Store:', verifyStore, 'Manager:', verifyManager)
+      
+      if (!verifyStore || !verifyManager) {
+        console.error('❌ CRITICAL: Pipeline ID failed to set properly!')
+        // Force set again
+        useStore.setState({ currentPipelineId: pipelineId })
+        pipelineIdManager.setPipelineId(pipelineId)
+      }
+
+      console.log('🎉 Pipeline-first upload workflow completed successfully!')
 
     } catch (error) {
-      console.error('Upload failed:', error)
+      console.error('Pipeline-first upload failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Upload failed'
       setUploadError(errorMessage)
       setStepStatus('document_upload', 'error', errorMessage)
@@ -442,21 +461,33 @@ function HomePageContent() {
       return
     }
 
+    console.log('📋 PIPELINE-FIRST STRIDE EXTRACTION for pipeline:', pipelineId)
+    
     setLoading(true)
     setStepStatus('data_extraction', 'in_progress')
+    setStrideError(null)
 
     try {
-      const result = await api.extractStrideData(pipelineId, {
-        enable_quality_validation: true
+      console.log('🔧 PIPELINE-FIRST: Executing STRIDE data extraction step in pipeline:', pipelineId)
+      
+      // Use pipeline step execution instead of direct document API
+      const result = await api.executeStep(pipelineId, 'data_extraction', {
+        enable_quality_validation: true,
+        background: false
       })
+      
+      console.log('✅ Pipeline STRIDE extraction completed:', result)
       
       // Update state with extracted security data
       setStepStatus('data_extraction', 'complete')
       setStepResult('data_extraction', result)
       
+      console.log('🎉 Pipeline-first STRIDE extraction workflow completed successfully!')
+      
     } catch (error) {
-      console.error('STRIDE data extraction failed:', error)
+      console.error('Pipeline-first STRIDE extraction failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'STRIDE data extraction failed'
+      setStrideError(errorMessage)
       setStepStatus('data_extraction', 'error', errorMessage)
     } finally {
       setLoading(false)
@@ -506,8 +537,7 @@ function HomePageContent() {
       }
     }
     
-    console.log('DFD extraction - Final Pipeline ID:', currentPipelineId)
-    console.log('DFD extraction - Full store state:', useStore.getState())
+    console.log('📋 PIPELINE-FIRST DFD EXTRACTION - Final Pipeline ID:', currentPipelineId)
     
     if (!currentPipelineId) {
       console.error('❌ No pipeline ID available for DFD extraction after all recovery attempts')
@@ -520,19 +550,40 @@ function HomePageContent() {
     setDfdExtractionError(null)
 
     try {
-      console.log('Starting DFD extraction for pipeline:', currentPipelineId)
-      const result = await api.extractDFDComponents(currentPipelineId)
+      console.log('🔧 PIPELINE-FIRST: Executing DFD extraction step in pipeline:', currentPipelineId)
+      
+      // Use pipeline step execution instead of direct document API
+      const result = await api.executeStep(currentPipelineId, 'dfd_extraction', {
+        use_enhanced_extraction: true,
+        enable_stride_review: true,
+        enable_confidence_scoring: true,
+        enable_security_validation: true,
+        background: false
+      })
+      
+      console.log('✅ Pipeline DFD extraction completed:', result)
+      
+      // Extract DFD components from pipeline step result
+      const dfdComponents = result.dfd_components || result.result?.dfd_components
+      const validation = result.validation || result.result?.validation
+      
+      if (!dfdComponents) {
+        throw new Error('No DFD components returned from pipeline step')
+      }
       
       // Update state with extracted DFD
-      setDfdComponents(result.dfd_components)
-      setDfdValidation(result.validation)
+      setDfdComponents(dfdComponents)
+      setDfdValidation(validation)
       setStepStatus('dfd_extraction', 'complete')
       setStepResult('dfd_extraction', result)
       
+      console.log('🎉 Pipeline-first DFD extraction workflow completed successfully!')
+      
     } catch (error) {
-      console.error('DFD extraction failed:', error)
+      console.error('Pipeline-first DFD extraction failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'DFD extraction failed'
       setStepStatus('dfd_extraction', 'error', errorMessage)
+      setDfdExtractionError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -548,20 +599,42 @@ function HomePageContent() {
       return
     }
 
+    console.log('📋 PIPELINE-FIRST THREAT GENERATION for pipeline:', pipelineId)
+    
     setLoading(true)
     setStepStatus('threat_generation', 'in_progress')
     setThreatGenerationError(null)
 
     try {
-      const result = await api.generateThreats(pipelineId, selectedAgents)
+      console.log('🔧 PIPELINE-FIRST: Executing threat generation step in pipeline:', pipelineId)
+      
+      // Use pipeline step execution instead of direct document API
+      const result = await api.executeStep(pipelineId, 'threat_generation', {
+        selected_agents: selectedAgents,
+        use_v3_generator: true,
+        multi_agent: true,
+        context_aware: true,
+        background: false
+      })
+      
+      console.log('✅ Pipeline threat generation completed:', result)
+      
+      // Extract threats from pipeline step result
+      const threats = result.threats || result.result?.threats || []
+      
+      if (threats.length === 0) {
+        console.warn('No threats returned from pipeline step')
+      }
       
       // Update state with generated threats
-      setThreats(result.threats)
+      setThreats(threats)
       setStepStatus('threat_generation', 'complete')
       setStepResult('threat_generation', result)
       
+      console.log('🎉 Pipeline-first threat generation workflow completed successfully!')
+      
     } catch (error) {
-      console.error('Threat generation failed:', error)
+      console.error('Pipeline-first threat generation failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Threat generation failed'
       setThreatGenerationError(errorMessage)
       setStepStatus('threat_generation', 'error', errorMessage)
@@ -571,25 +644,45 @@ function HomePageContent() {
   }
 
   const handleRefineThreats = async () => {
-    if (!useStore.getState().currentPipelineId) {
+    const pipelineId = useStore.getState().currentPipelineId
+    
+    if (!pipelineId) {
       console.error('No pipeline ID available')
       return
     }
 
+    console.log('📋 PIPELINE-FIRST THREAT REFINEMENT for pipeline:', pipelineId)
+    
     setLoading(true)
     setStepStatus('threat_refinement', 'in_progress')
     setThreatRefinementError(null)
 
     try {
-      const result = await api.refineThreats(useStore.getState().currentPipelineId!)
+      console.log('🔧 PIPELINE-FIRST: Executing threat refinement step in pipeline:', pipelineId)
+      
+      // Use pipeline step execution instead of direct document API
+      const result = await api.executeStep(pipelineId, 'threat_refinement', {
+        background: false
+      })
+      
+      console.log('✅ Pipeline threat refinement completed:', result)
+      
+      // Extract refined threats from pipeline step result
+      const refinedThreats = result.refined_threats || result.result?.refined_threats || []
+      
+      if (refinedThreats.length === 0) {
+        console.warn('No refined threats returned from pipeline step')
+      }
       
       // Update state with refined threats
-      setRefinedThreats(result.refined_threats)
+      setRefinedThreats(refinedThreats)
       setStepStatus('threat_refinement', 'complete')
       setStepResult('threat_refinement', result)
       
+      console.log('🎉 Pipeline-first threat refinement workflow completed successfully!')
+      
     } catch (error) {
-      console.error('Threat refinement failed:', error)
+      console.error('Pipeline-first threat refinement failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Threat refinement failed'
       setThreatRefinementError(errorMessage)
       setStepStatus('threat_refinement', 'error', errorMessage)

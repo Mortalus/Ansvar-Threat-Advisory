@@ -64,6 +64,9 @@ services:
       - CORS_ORIGINS=http://localhost:3001,http://localhost:3000,http://web:3000
     env_file:
       - ./apps/api/.env
+    secrets:
+      - scaleway_api_key
+      - azure_api_key
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,6 +92,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./apps/api/.env
+    secrets:
+      - scaleway_api_key
+      - azure_api_key
     depends_on:
       - postgres
       - redis
@@ -110,6 +116,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./apps/api/.env
+    secrets:
+      - scaleway_api_key
+      - azure_api_key
     depends_on:
       - postgres
       - redis
@@ -132,6 +141,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./apps/api/.env
+    secrets:
+      - scaleway_api_key
+      - azure_api_key
     depends_on:
       - redis
     command: celery -A app.celery_app flower --port=5555
@@ -183,3 +195,9 @@ volumes:
   redis_data:
   ollama_data:
   api_uploads:
+
+secrets:
+  scaleway_api_key:
+    file: ./secrets/scaleway_api_key.txt
+  azure_api_key:
+    file: ./secrets/azure_api_key.txt

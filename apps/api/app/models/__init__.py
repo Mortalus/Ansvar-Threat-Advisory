@@ -3,6 +3,7 @@
 from .base import Base, BaseModel
 from .pipeline import Pipeline, PipelineStep, PipelineStepResult, PipelineStatus, StepStatus
 from .user import User
+from .rbac import Role, Permission, UserSession, AuditLog, RoleType, PermissionType, user_roles, role_permissions
 from .prompt import Prompt
 from .knowledge_base import KnowledgeBaseEntry
 from .threat_feedback import ThreatFeedback, ValidationAction
@@ -13,6 +14,14 @@ __all__ = [
     "Base",
     "BaseModel",
     "User", 
+    "Role",
+    "Permission", 
+    "UserSession",
+    "AuditLog",
+    "RoleType",
+    "PermissionType",
+    "user_roles",
+    "role_permissions",
     "Pipeline",
     "PipelineStep",
     "PipelineStepResult",

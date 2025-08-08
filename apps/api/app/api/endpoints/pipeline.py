@@ -1,11 +1,20 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List, Dict, Any
-from app.core.pipeline.manager import PipelineManager, PipelineStatus
+from pydantic import BaseModel
+from app.core.pipeline.manager import PipelineManager, PipelineStatus, PipelineStep
 from app.dependencies import get_pipeline_manager
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+
+class ExecuteStepRequest(BaseModel):
+    """Request model for executing a pipeline step"""
+    background: bool = False
+    data: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        extra = "allow"  # Allow additional fields to be passed through
 
 @router.post("/create")
 async def create_pipeline(
@@ -34,6 +43,73 @@ async def create_pipeline(
         }
     except Exception as e:
         logger.error(f"Failed to create pipeline: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{pipeline_id}/step/{step}")
+async def execute_step(
+    pipeline_id: str,
+    step: str,
+    request: ExecuteStepRequest = ExecuteStepRequest(),
+    manager: PipelineManager = Depends(get_pipeline_manager)
+):
+    """Execute a specific step in the pipeline"""
+    try:
+        # Validate step
+        try:
+            step_enum = PipelineStep(step)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid step '{step}'. Must be one of: {', '.join([s.value for s in PipelineStep])}"
+            )
+        
+        # Check if pipeline exists
+        pipeline_status = await manager.get_pipeline_status(pipeline_id)
+        if "error" in pipeline_status:
+            raise HTTPException(status_code=404, detail=pipeline_status["error"])
+        
+        # Prepare step data - merge request data with additional fields
+        step_data = request.data or {}
+        
+        # Add any additional fields from the request
+        for key, value in request.dict(exclude={"background", "data"}).items():
+            if value is not None:
+                step_data[key] = value
+        
+        logger.info(f"Executing step '{step}' for pipeline {pipeline_id} with data: {step_data}")
+        
+        # Execute the step
+        if request.background:
+            # Use background task execution
+            from app.tasks.pipeline_tasks import execute_pipeline_step
+            task = execute_pipeline_step.delay(pipeline_id, step, step_data)
+            return {
+                "task_id": task.id,
+                "status": "queued",
+                "message": f"Step '{step}' queued for background execution",
+                "pipeline_id": pipeline_id,
+                "step": step
+            }
+        else:
+            # Execute synchronously
+            result = await manager.execute_step(
+                pipeline_id=pipeline_id,
+                step=step_enum,
+                data=step_data
+            )
+            
+            logger.info(f"Step '{step}' completed for pipeline {pipeline_id}")
+            return {
+                "pipeline_id": pipeline_id,
+                "step": step,
+                "status": "completed",
+                "result": result
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to execute step '{step}' for pipeline {pipeline_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{pipeline_id}/status")

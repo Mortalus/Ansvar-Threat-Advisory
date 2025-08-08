@@ -58,6 +58,9 @@ class Pipeline(BaseModel):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     owner = relationship("User", back_populates="pipelines")
     
+    # Multi-tenancy support for client data segregation
+    client_id = Column(String(100), nullable=True, index=True)  # Links to external client organization
+    
     # Pipeline steps relationship
     steps = relationship("PipelineStep", back_populates="pipeline", cascade="all, delete-orphan", order_by="PipelineStep.step_number")
     
