@@ -273,7 +273,7 @@ export function EnhancedDFDReview() {
   }
 
   const handleContinue = () => {
-    setCurrentStep('threat_generation')
+    setCurrentStep('agent_config')
   }
 
   const handleCopy = async (content: string) => {

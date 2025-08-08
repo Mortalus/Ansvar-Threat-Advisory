@@ -8,6 +8,7 @@ export type PipelineStep =
   | 'data_extraction_review'
   | 'dfd_extraction' 
   | 'dfd_review'
+  | 'agent_config'
   | 'threat_generation'
   | 'threat_refinement'
   | 'attack_path_analysis'
@@ -51,6 +52,15 @@ interface StoreState {
   refinedThreats: any[]
   attackPaths: any[]
   
+  // Agent state
+  selectedAgents: string[]
+  agentExecutionStatus: Record<string, {
+    status: 'pending' | 'running' | 'completed' | 'failed'
+    progress?: number
+    threatsFound?: number
+    error?: string
+  }>
+  
   // UI state
   isLoading: boolean
   error: string | null
@@ -76,6 +86,14 @@ interface StoreState {
   setThreats: (threats: any[]) => void
   setRefinedThreats: (threats: any[]) => void
   setAttackPaths: (paths: any[]) => void
+  
+  setSelectedAgents: (agents: string[]) => void
+  setAgentExecutionStatus: (agentName: string, status: {
+    status: 'pending' | 'running' | 'completed' | 'failed'
+    progress?: number
+    threatsFound?: number
+    error?: string
+  }) => void
   
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -105,6 +123,7 @@ const initialStepStates: Record<PipelineStep, PipelineStepState> = {
   data_extraction_review: { ...initialStepState },
   dfd_extraction: { ...initialStepState },
   dfd_review: { ...initialStepState },
+  agent_config: { ...initialStepState },
   threat_generation: { ...initialStepState },
   threat_refinement: { ...initialStepState },
   attack_path_analysis: { ...initialStepState },
@@ -130,6 +149,9 @@ export const useStore = create<StoreState>()(
         threats: [],
         refinedThreats: [],
         attackPaths: [],
+        
+        selectedAgents: [],
+        agentExecutionStatus: {},
         
         isLoading: false,
         error: null,
@@ -178,6 +200,15 @@ export const useStore = create<StoreState>()(
         setRefinedThreats: (threats) => set({ refinedThreats: threats }),
         
         setAttackPaths: (paths) => set({ attackPaths: paths }),
+        
+        setSelectedAgents: (agents) => set({ selectedAgents: agents }),
+        
+        setAgentExecutionStatus: (agentName, status) => set((state) => ({
+          agentExecutionStatus: {
+            ...state.agentExecutionStatus,
+            [agentName]: status
+          }
+        })),
         
         setLoading: (loading) => set({ isLoading: loading }),
         
@@ -232,6 +263,8 @@ export const useStore = create<StoreState>()(
           threats: [],
           refinedThreats: [],
           attackPaths: [],
+          selectedAgents: [],
+          agentExecutionStatus: {},
           isLoading: false,
           error: null,
         }),
@@ -246,6 +279,7 @@ export const useStore = create<StoreState>()(
             'document_upload',
             'dfd_extraction',
             'dfd_review',
+            'agent_config',
             'threat_generation',
             'threat_refinement',
             'attack_path_analysis'

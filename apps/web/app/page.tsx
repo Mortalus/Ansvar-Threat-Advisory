@@ -7,6 +7,8 @@ import { api, Threat, RefinedThreat, ThreatRefinementResponse } from '@/lib/api'
 import { pipelineIdManager } from '@/lib/pipeline-id-manager'
 import { Upload, FileText, X, AlertCircle, CheckCircle, Play, ArrowRight, Eye, Shield, Target, Brain, Star, Settings, FolderOpen } from 'lucide-react'
 import { EnhancedDFDReview } from '@/components/pipeline/steps/enhanced-dfd-review'
+import { AgentConfigurationStep } from '@/components/pipeline/steps/agent-configuration-step'
+import { ThreatGenerationStep } from '@/components/pipeline/steps/threat-generation-step'
 import { DebugPanel } from '@/components/debug/debug-panel'
 import { PromptManager } from '@/components/ai-customization/prompt-manager'
 
@@ -537,7 +539,11 @@ function HomePageContent() {
   }
 
   const handleGenerateThreats = async () => {
-    if (!useStore.getState().currentPipelineId) {
+    const storeState = useStore.getState()
+    const pipelineId = storeState.currentPipelineId
+    const selectedAgents = storeState.selectedAgents
+    
+    if (!pipelineId) {
       console.error('No pipeline ID available')
       return
     }
@@ -547,7 +553,7 @@ function HomePageContent() {
     setThreatGenerationError(null)
 
     try {
-      const result = await api.generateThreats(useStore.getState().currentPipelineId!)
+      const result = await api.generateThreats(pipelineId, selectedAgents)
       
       // Update state with generated threats
       setThreats(result.threats)
@@ -1299,7 +1305,13 @@ function HomePageContent() {
       case 'dfd_review':
         return <EnhancedDFDReview />
 
+      case 'agent_config':
+        return <AgentConfigurationStep />
+
       case 'threat_generation':
+        return <ThreatGenerationStep />
+
+      case 'threat_generation_old':
         return (
           <div className="h-full flex flex-col">
             <div className="mb-6">
@@ -1772,6 +1784,7 @@ function HomePageContent() {
               { id: 'data_extraction_review', name: 'Data Review' },
               { id: 'dfd_extraction', name: 'DFD Extraction' },
               { id: 'dfd_review', name: 'DFD Review' },
+              { id: 'agent_config', name: 'Agent Configuration' },
               { id: 'threat_generation', name: 'Threat Generation' },
               { id: 'threat_refinement', name: 'Threat Refinement' },
               { id: 'attack_path_analysis', name: 'Attack Path Analysis' },
@@ -1784,7 +1797,7 @@ function HomePageContent() {
               const isInProgress = status === 'in_progress'
               
               // Check if step is accessible based on previous steps
-              const steps = ['document_upload', 'data_extraction', 'data_extraction_review', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis']
+              const steps = ['document_upload', 'data_extraction', 'data_extraction_review', 'dfd_extraction', 'dfd_review', 'agent_config', 'threat_generation', 'threat_refinement', 'attack_path_analysis']
               const stepIndex = steps.indexOf(step.id)
               
               // AI Customization is always accessible (it's a settings page)
@@ -1818,7 +1831,7 @@ function HomePageContent() {
                        isError ? '!' :
                        isInProgress ? '...' :
                        step.id === 'ai_customization' ? <Settings className="w-4 h-4" /> :
-                       ['1', '2', '3', '4', '5', '6', '7', '8'][['document_upload', 'data_extraction', 'data_extraction_review', 'dfd_extraction', 'dfd_review', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
+                       ['1', '2', '3', '4', '5', '6', '7', '8', '9'][['document_upload', 'data_extraction', 'data_extraction_review', 'dfd_extraction', 'dfd_review', 'agent_config', 'threat_generation', 'threat_refinement', 'attack_path_analysis'].indexOf(step.id)]}
                     </div>
                     <div className="flex-1">
                       <span className={isActive ? 'font-semibold' : ''}>{step.name}</span>

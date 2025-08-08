@@ -517,6 +517,125 @@ async def disable_agent(
         raise HTTPException(status_code=500, detail=f"Failed to disable agent: {e}")
 
 
+@router.get("/{agent_name}/history")
+async def get_agent_execution_history(
+    agent_name: str,
+    limit: int = Query(20, ge=1, le=100, description="Number of history entries to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get execution history for a specific agent"""
+    
+    try:
+        # Verify agent exists
+        agent = agent_registry.get_agent(agent_name)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
+        
+        # Get execution logs
+        stmt = (
+            select(AgentExecutionLog)
+            .where(AgentExecutionLog.agent_name == agent_name)
+            .order_by(AgentExecutionLog.executed_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+        
+        return [
+            {
+                "execution_id": log.execution_id,
+                "executed_at": log.executed_at.isoformat(),
+                "success": log.success,
+                "execution_time": log.execution_time,
+                "threats_found": log.threats_found,
+                "tokens_used": log.tokens_used,
+                "average_confidence": log.average_confidence,
+                "error_message": log.error_message if not log.success else None
+            }
+            for log in logs
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get execution history for {agent_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get execution history: {e}")
+
+
+@router.get("/{agent_name}/performance")
+async def get_agent_performance_stats(
+    agent_name: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get performance statistics for a specific agent"""
+    
+    try:
+        # Verify agent exists
+        agent = agent_registry.get_agent(agent_name)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
+        
+        # Get configuration for basic metrics
+        stmt = select(AgentConfiguration).where(
+            AgentConfiguration.agent_name == agent_name
+        )
+        result = await db.execute(stmt)
+        config = result.scalar_one_or_none()
+        
+        if not config:
+            # Return empty stats if no configuration exists
+            return {
+                "total_executions": 0,
+                "successful_executions": 0,
+                "success_rate": 0.0,
+                "average_execution_time": 0.0,
+                "average_threats_per_execution": 0.0,
+                "average_confidence_score": 0.0,
+                "total_tokens_used": 0,
+                "last_30_days": {
+                    "executions": 0,
+                    "success_rate": 0.0
+                }
+            }
+        
+        # Calculate recent performance (last 30 days)
+        cutoff_date = datetime.utcnow() - timedelta(days=30)
+        recent_stmt = (
+            select(AgentExecutionLog)
+            .where(
+                AgentExecutionLog.agent_name == agent_name,
+                AgentExecutionLog.executed_at >= cutoff_date
+            )
+        )
+        recent_result = await db.execute(recent_stmt)
+        recent_logs = recent_result.scalars().all()
+        
+        recent_executions = len(recent_logs)
+        recent_success_rate = (
+            sum(1 for log in recent_logs if log.success) / recent_executions * 100
+        ) if recent_executions > 0 else 0.0
+        
+        return {
+            "total_executions": config.total_executions,
+            "successful_executions": config.successful_executions,
+            "success_rate": round(config.get_success_rate(), 2),
+            "average_execution_time": round(config.average_execution_time, 2),
+            "average_threats_per_execution": round(config.get_average_threats(), 2),
+            "average_confidence_score": round(config.average_confidence_score, 3),
+            "total_tokens_used": config.total_tokens_used,
+            "last_30_days": {
+                "executions": recent_executions,
+                "success_rate": round(recent_success_rate, 1)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get performance stats for {agent_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get performance stats: {e}")
+
+
 # Helper Functions
 async def _calculate_performance_trend(agent_name: str, db: AsyncSession) -> Dict[str, Any]:
     """Calculate performance trend over time"""

@@ -41,15 +41,15 @@ A **Production-Ready** RAG-Powered Threat Modeling Pipeline application with ent
 - ✅ **Few-Shot Learning** - Self-improving AI agents that learn from user feedback patterns
 - ✅ **Unlimited Threat Processing** - Removed all arbitrary limits (50 threat cap, top-15 refinement, etc.)
 
-🔌 **MODULAR AGENT ARCHITECTURE (COMPLETED - FEBRUARY 2025)** 
-- ✅ **Plugin-Based Agents** - Drop-in agent system for easy addition/removal without code changes
-- ✅ **Agent Registry** - Dynamic discovery and registration of threat analysis agents  
-- ✅ **Hot Reload System** - Update agents and prompts without service restart
-- ✅ **Web Management Interface Backend** - Complete REST API for agent configuration and monitoring
-- ✅ **Database-Backed Configuration** - Persistent agent settings, metrics, and version control
-- ✅ **100% Backward Compatible** - Preserves all V3 functionality during migration
-- ✅ **Shadow Mode Testing** - Compare agent versions safely with automatic fallback
-- ✅ **Zero-Downtime Migration** - Gradual rollout from legacy to modular system
+🔌 **AGENT-BASED THREAT GENERATION UI COMPLETE (FEBRUARY 2025)** 
+- ✅ **Agent Selection Interface** - Interactive agent configuration step in pipeline
+- ✅ **Real-time Progress Tracking** - Live updates during multi-agent threat generation
+- ✅ **WebSocket Integration** - Real-time agent status and progress indicators
+- ✅ **Agent Configuration API** - Complete REST endpoints for agent management
+- ✅ **Defensive Programming** - Comprehensive error handling and timeout protection
+- ✅ **Performance Optimization** - 3-second timeout handling for slow endpoints
+- ✅ **User Experience** - Clear agent selection, progress tracking, and error messaging
+- ✅ **Full Pipeline Integration** - Seamless flow from DFD review to agent-based threats
 Current Architecture
 Directory Structure
 ThreatModelingPipeline/
@@ -95,7 +95,7 @@ ThreatModelingPipeline/
 │       │   └── admin/        # 🚧 PLANNED: Admin interface
 │       │       └── agents/   # Agent management UI
 │       ├── components/       # React components
-│       │   ├── pipeline/steps/ # Step-specific components (enhanced-dfd-review, dfd-review, interactive-mermaid)
+│       │   ├── pipeline/steps/ # Step-specific components (enhanced-dfd-review, dfd-review, interactive-mermaid, agent-configuration-step, threat-generation-step)
 │       │   ├── admin/        # 🚧 PLANNED: Frontend admin components (backend APIs complete)
 │       │   │   ├── agent-manager.tsx     # Main agent management interface
 │       │   │   ├── agent-configurator.tsx # Agent configuration form
@@ -189,18 +189,24 @@ Pipeline Process Flow
    - Interactive Mermaid diagram visualization
    - Visual, split-view, and code view modes
    - Full editing capabilities for all components
-4. **Threat Generation** → RAG-powered AI generates threats using:
-   - Real threat intelligence from CISA KEV and MITRE ATT&CK
-   - Component-specific STRIDE analysis
-   - Risk-based threat prioritization
-   - Enhanced prompting with contextual threat data
-5. **Threat Refinement** → AI-powered threat enhancement with:
+4. **Agent Configuration** → NEW: User selects threat analysis agents with:
+   - Interactive agent selection interface (Architecture, Business, Compliance)
+   - Real-time agent availability checking
+   - Input validation and error handling
+   - Seamless progression to threat generation
+5. **Threat Generation** → Agent-based AI threat analysis with:
+   - Multi-agent concurrent processing
+   - Real-time progress tracking via WebSocket
+   - Individual agent status indicators
+   - Enhanced prompting with agent-specific expertise
+   - RAG-powered threat intelligence integration
+6. **Threat Refinement** → AI-powered threat enhancement with:
    - Business impact assessment
    - Contextual risk scoring (Critical/High/Medium/Low)
    - Implementation priority ranking
    - Enhanced mitigation strategies
    - Assessment reasoning and exploitability analysis
-6. **Attack Path Analysis** → AI analyzes attack paths (user validates) - Coming Soon
+7. **Attack Path Analysis** → AI analyzes attack paths (user validates) - Coming Soon
 
 Current Features
 **✅ PRODUCTION FEATURES IMPLEMENTED**
@@ -226,12 +232,22 @@ Current Features
 
 **✅ EXISTING UI/UX FEATURES**
 - ✅ Modern dark UI with purple/blue gradients and enhanced threat visualization
-- ✅ 6-step pipeline sidebar navigation with real-time status indicators
+- ✅ 7-step pipeline sidebar navigation with real-time status indicators
 - ✅ File upload interface with drag-and-drop and validation
-- ✅ State management with Zustand including persistence
+- ✅ State management with Zustand including persistence and agent selection
 - ✅ Responsive layout with intelligent step progression
 - ✅ CORS configuration with dynamic origins and wildcard support
 - ✅ LLM provider factory with Scaleway, Azure, Ollama, and Mock support
+- ✅ **Agent Configuration Interface** with:
+  - Interactive agent selection (Architecture, Business, Compliance)
+  - Real-time agent availability checking
+  - Defensive error handling and validation
+  - Loading states and progress indicators
+- ✅ **Agent-Based Threat Generation** with:
+  - Real-time progress tracking via WebSocket
+  - Individual agent status indicators
+  - Comprehensive timeout handling (5-minute limit)
+  - Agent execution summaries and metrics
 - ✅ **Enhanced DFD Review Interface** with:
   - Multiple view modes (Visual, JSON, Mermaid, Split-view)
   - Interactive Mermaid diagram with real-time updates
@@ -246,7 +262,19 @@ Current Features
 - ✅ **Debug Panel** for development with sample data injection
 - ✅ Manual step progression with prerequisite validation
 
-**✅ RECENTLY COMPLETED - EXPERT-LEVEL ENHANCEMENTS (LATEST)**
+**✅ RECENTLY COMPLETED - AGENT-BASED UI SYSTEM (FEBRUARY 2025)**
+- ✅ **Complete Agent-Based UI Flow** - Full user interface for agent selection and threat generation
+- ✅ **Real-Time Agent Progress** - WebSocket-powered live updates during multi-agent processing
+- ✅ **Defensive Programming Implementation** - Comprehensive error handling, timeout protection, and graceful degradation
+- ✅ **Performance Optimization** - 3-second timeout handling for slow API endpoints to prevent UI blocking
+- ✅ **Agent Configuration Step** - Interactive interface for selecting threat analysis agents
+- ✅ **Enhanced Threat Generation Step** - Live progress tracking with individual agent status indicators
+- ✅ **API Endpoint Updates** - Backend modified to accept agent selections and provide real-time updates
+- ✅ **State Management Enhancement** - Zustand store updated with agent selection and execution status
+- ✅ **Comprehensive Error Recovery** - Timeout handling, API fallbacks, and user-friendly error messages
+- ✅ **Pipeline Flow Integration** - Seamless 7-step flow from document upload through agent-based analysis
+
+**✅ EXPERT-LEVEL ENHANCEMENTS (PREVIOUS)**
 - ✅ **Few-Shot Learning System** - Self-improving AI agents that learn from user feedback (accepted/edited/rejected threats)
 - ✅ **Unlimited Threat Processing** - Removed all arbitrary limits: 50-threat cap, top-15 refinement, 5-per-component, 10-threat analysis
 - ✅ **Token Cost Visibility** - Document upload shows estimated token usage immediately (🪙 15,234 tokens)
@@ -475,10 +503,10 @@ API Endpoints Available
   - enable_confidence_scoring: Component confidence analysis (default: true)
   - enable_security_validation: Security gap analysis (default: true)
 - `POST /api/documents/review-dfd` - Review and edit DFD components
-- `POST /api/documents/generate-threats` - Generate threats with multiple analysis modes:
-  - Basic (V1): Traditional STRIDE analysis
-  - Context-Aware (V2): Residual risk with controls library (use_v2_generator: true)
-  - Multi-Agent (V3): Holistic analysis with architectural/business/compliance agents (use_v3_generator: true)
+- `POST /api/documents/generate-threats` - Generate threats with agent-based analysis:
+  - Selected agents: Specify which agents to use (selected_agents parameter)
+  - Real-time progress: WebSocket updates during execution
+  - Multiple analysis modes: V1 (Basic), V2 (Context-Aware), V3 (Multi-Agent)
 - `POST /api/documents/refine-threats` - Refine threats with AI analysis
 - `GET  /api/documents/sample-dfd` - Get sample DFD for testing
 - `POST /api/pipeline/create` - Create new pipeline
@@ -535,6 +563,7 @@ API Endpoints Available
 **🔌 Agent Management Endpoints (COMPLETED - FEBRUARY 2025)**
 - `GET  /api/agents/list` - List all available agents with status and basic metrics
 - `GET  /api/agents/{agent_name}` - Get detailed agent information with execution history
+- `GET  /api/agents/{agent_name}/history` - Get agent execution history with performance data
 - `POST /api/agents/{agent_name}/configure` - Update agent configuration with hot reload
 - `POST /api/agents/{agent_name}/test` - Test agent with sample data and performance metrics
 - `POST /api/agents/{agent_name}/enable` - Enable an agent for execution

@@ -27,16 +27,40 @@ export function AgentConfigurationStep() {
   const loadAgents = async () => {
     try {
       setLoading(true)
+      setError(null)
+      
+      // Defensive: Check if API is available first
+      if (!api || !api.getAvailableAgents) {
+        throw new Error('Agent API is not available')
+      }
+      
       const agentList = await api.getAvailableAgents()
+      
+      // Defensive: Validate response structure
+      if (!agentList || !Array.isArray(agentList)) {
+        console.warn('Invalid agent list response:', agentList)
+        throw new Error('Invalid agent data received from server')
+      }
+      
       setAgents(agentList)
       
       // Set default enabled agents (those marked enabled_by_default)
       const defaultEnabled = agentList
-        .filter(agent => agent.enabled_by_default)
+        .filter(agent => agent && agent.enabled_by_default)
         .map(agent => agent.name)
+        .filter(Boolean) // Remove any undefined names
+      
       setEnabledAgents(defaultEnabled)
+      
+      console.log(`✅ Loaded ${agentList.length} agents, ${defaultEnabled.length} enabled by default`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents')
+      console.error('❌ Failed to load agents:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load agents'
+      setError(`${errorMessage}. Please check that the backend services are running.`)
+      
+      // Defensive: Set fallback agents to prevent UI from breaking
+      setAgents([])
+      setEnabledAgents([])
     } finally {
       setLoading(false)
     }
@@ -51,10 +75,38 @@ export function AgentConfigurationStep() {
   }
 
   const handleContinue = () => {
-    // Store agent configuration for the threat generation step
-    useStore.setState({ selectedAgents: enabledAgents })
-    setStepStatus('agent_config', 'complete')
-    setCurrentStep('threat_generation')
+    try {
+      // Defensive: Validate that we have enabled agents
+      if (!enabledAgents || enabledAgents.length === 0) {
+        setError('Please select at least one agent before continuing')
+        return
+      }
+      
+      // Defensive: Validate agent names
+      const validAgentNames = enabledAgents.filter(name => 
+        name && typeof name === 'string' && name.length > 0
+      )
+      
+      if (validAgentNames.length !== enabledAgents.length) {
+        console.warn('Some invalid agent names filtered out:', enabledAgents)
+      }
+      
+      if (validAgentNames.length === 0) {
+        setError('No valid agents selected')
+        return
+      }
+      
+      console.log(`✅ Continuing with ${validAgentNames.length} selected agents:`, validAgentNames)
+      
+      // Store agent configuration for the threat generation step
+      useStore.setState({ selectedAgents: validAgentNames })
+      setStepStatus('agent_config', 'complete')
+      setCurrentStep('threat_generation')
+      
+    } catch (err) {
+      console.error('❌ Error in handleContinue:', err)
+      setError('Failed to save agent configuration. Please try again.')
+    }
   }
 
   const getAgentDescription = (agent: AgentInfo) => {

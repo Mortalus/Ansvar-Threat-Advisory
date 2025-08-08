@@ -50,7 +50,7 @@ export function DFDReviewStep() {
       setStepResult('dfd_review', result)
       
       // Auto-advance to next step
-      setCurrentStep('threat_generation')
+      setCurrentStep('agent_config')
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save DFD review'

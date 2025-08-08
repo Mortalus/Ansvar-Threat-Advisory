@@ -406,6 +406,7 @@ class GenerateThreatsRequest(BaseModel):
     context_aware: bool = True  # Enable context-aware threat generation
     use_v3_generator: bool = True  # Use V3 multi-agent generator (recommended)
     multi_agent: bool = True  # Enable multi-agent analysis
+    selected_agents: Optional[List[str]] = []  # List of specific agents to use
 
 class RefineThreatRequest(BaseModel):
     pipeline_id: str
@@ -481,7 +482,8 @@ async def generate_threats(
                 "use_v2_generator": request.use_v2_generator,
                 "context_aware": request.context_aware,
                 "use_v3_generator": request.use_v3_generator,
-                "multi_agent": request.multi_agent
+                "multi_agent": request.multi_agent,
+                "selected_agents": request.selected_agents
             }
         )
         

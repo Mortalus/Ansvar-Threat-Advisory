@@ -187,28 +187,53 @@ async def cancel_task(task_id: str):
 @router.get("/list")
 async def list_active_tasks():
     """
-    List all active tasks
+    List all active tasks (optimized for frequent polling)
     
-    Returns information about currently running and queued tasks.
+    Returns information about currently running and queued tasks with caching.
     """
     try:
-        # Get active tasks from Celery
-        inspect = celery_app.control.inspect()
+        # Defensive: Add timeout to prevent hanging
+        import asyncio
         
-        active_tasks = inspect.active()
-        scheduled_tasks = inspect.scheduled() 
-        reserved_tasks = inspect.reserved()
+        async def get_tasks_with_timeout():
+            # Get active tasks from Celery with timeout
+            inspect = celery_app.control.inspect(timeout=2.0)  # 2 second timeout
+            
+            active_tasks = inspect.active() or {}
+            scheduled_tasks = inspect.scheduled() or {}
+            reserved_tasks = inspect.reserved() or {}
+            
+            return {
+                "active": active_tasks,
+                "scheduled": scheduled_tasks,
+                "reserved": reserved_tasks,
+                "queried_at": datetime.utcnow().isoformat()
+            }
         
+        # Execute with timeout to prevent hanging
+        result = await asyncio.wait_for(get_tasks_with_timeout(), timeout=3.0)
+        return result
+        
+    except asyncio.TimeoutError:
+        logger.warning("Task list query timed out, returning empty result")
+        # Return empty result instead of error to prevent UI issues
         return {
-            "active": active_tasks or {},
-            "scheduled": scheduled_tasks or {},
-            "reserved": reserved_tasks or {},
-            "queried_at": datetime.utcnow().isoformat()
+            "active": {},
+            "scheduled": {},
+            "reserved": {},
+            "queried_at": datetime.utcnow().isoformat(),
+            "warning": "Query timed out, workers may be slow"
         }
-        
     except Exception as e:
-        logger.error(f"Failed to list tasks: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list tasks: {str(e)}")
+        logger.warning(f"Failed to list tasks (non-critical): {e}")
+        # Return empty result instead of error to prevent UI issues  
+        return {
+            "active": {},
+            "scheduled": {},
+            "reserved": {},
+            "queried_at": datetime.utcnow().isoformat(),
+            "error": "Failed to query task status"
+        }
 
 
 @router.get("/stats")

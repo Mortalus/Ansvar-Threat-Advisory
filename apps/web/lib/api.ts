@@ -267,7 +267,10 @@ async function reviewDFDComponents(pipelineId: string, dfdComponents: DFDCompone
   return response.json()
 }
 
-async function generateThreats(pipelineId: string): Promise<ThreatGenerationResponse> {
+async function generateThreats(
+  pipelineId: string, 
+  selectedAgents?: string[]
+): Promise<ThreatGenerationResponse> {
   const response = await fetch(`${API_URL}/api/documents/generate-threats`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -276,7 +279,8 @@ async function generateThreats(pipelineId: string): Promise<ThreatGenerationResp
       use_v2_generator: false,
       context_aware: true,
       use_v3_generator: true,
-      multi_agent: true
+      multi_agent: true,
+      selected_agents: selectedAgents || []
     })
   })
   
@@ -639,13 +643,76 @@ export interface AgentTestResult {
 
 // Agent Management API Functions
 async function getAvailableAgents(): Promise<AgentInfo[]> {
-  const response = await fetch(`${API_URL}/api/agents/list`)
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Failed to get available agents' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
+  try {
+    // Defensive: Add timeout to prevent hanging requests
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+    
+    const response = await fetch(`${API_URL}/api/agents/list`, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
+    })
+    
+    clearTimeout(timeoutId)
+    
+    if (!response.ok) {
+      let errorDetail = 'Failed to get available agents'
+      try {
+        const error = await response.json()
+        errorDetail = error.detail || error.message || `HTTP ${response.status}: ${response.statusText}`
+      } catch (parseError) {
+        console.warn('Failed to parse error response:', parseError)
+        errorDetail = `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorDetail)
+    }
+    
+    const data = await response.json()
+    
+    // Defensive: Validate response structure
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid response format from agents API')
+    }
+    
+    const agents = data.agents || []
+    
+    // Defensive: Validate agents array
+    if (!Array.isArray(agents)) {
+      console.warn('Invalid agents array in response:', agents)
+      return []
+    }
+    
+    // Defensive: Filter out invalid agents
+    const validAgents = agents.filter(agent => 
+      agent && 
+      typeof agent === 'object' &&
+      agent.name && 
+      typeof agent.name === 'string' &&
+      agent.description &&
+      agent.category
+    )
+    
+    if (validAgents.length !== agents.length) {
+      console.warn(`Filtered out ${agents.length - validAgents.length} invalid agents`)
+    }
+    
+    console.log(`✅ Loaded ${validAgents.length} valid agents`)
+    return validAgents
+    
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.')
+    }
+    
+    console.error('Failed to fetch available agents:', error)
+    
+    // Rethrow with more context
+    const message = error instanceof Error ? error.message : 'Unknown error occurred'
+    throw new Error(`Unable to load agents: ${message}`)
   }
-  const data = await response.json()
-  return data.agents || []
 }
 
 async function getAgentConfiguration(agentName: string): Promise<AgentConfiguration> {
