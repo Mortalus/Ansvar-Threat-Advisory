@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { Card } from '@/components/ui/card'
+import { setAuthToken, setUserData } from '@/lib/auth-cookies'
 
 interface LoginFormProps {
   onLogin?: (userData: any) => void
@@ -39,9 +40,9 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
 
       const userData = await response.json()
       
-      // Store session token in localStorage
-      localStorage.setItem('session_token', userData.session_token)
-      localStorage.setItem('user_data', JSON.stringify(userData))
+      // Store session token in secure cookies and localStorage
+      setAuthToken(userData.session_token)
+      setUserData(userData)
 
       // Call onLogin callback if provided
       if (onLogin) {

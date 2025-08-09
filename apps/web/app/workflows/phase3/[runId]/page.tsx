@@ -25,6 +25,7 @@ import {
   GitBranch,
   Package
 } from 'lucide-react';
+import { getAuthToken } from '@/lib/auth-cookies';
 
 interface WorkflowStep {
   step_id: string;
@@ -76,7 +77,15 @@ export default function WorkflowExecutionDetail() {
   // Fetch run details
   const fetchRunDetails = useCallback(async () => {
     try {
-      const response = await fetch(`/api/phase2/workflow/runs/${runId}/status`);
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
+      const response = await fetch(`/api/phase2/workflow/runs/${runId}/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setRunDetails(data);
@@ -85,6 +94,8 @@ export default function WorkflowExecutionDetail() {
         if (data.status === 'running' || data.status === 'created') {
           setTimeout(fetchRunDetails, 2000); // Poll every 2 seconds
         }
+      } else if (response.status === 401) {
+        router.push('/login');
       } else {
         setError('Failed to fetch workflow details');
       }
@@ -93,7 +104,7 @@ export default function WorkflowExecutionDetail() {
     } finally {
       setLoading(false);
     }
-  }, [runId]);
+  }, [runId, router]);
 
   useEffect(() => {
     fetchRunDetails();
@@ -120,14 +131,25 @@ export default function WorkflowExecutionDetail() {
   const executeNextStep = async () => {
     try {
       setIsExecuting(true);
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
       const response = await fetch(`/api/phase2/workflow/runs/${runId}/execute-next`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({})
       });
 
       if (response.ok) {
         await fetchRunDetails();
+      } else if (response.status === 401) {
+        router.push('/login');
       } else {
         setError('Failed to execute next step');
       }
@@ -141,13 +163,24 @@ export default function WorkflowExecutionDetail() {
   const executeAsync = async () => {
     try {
       setIsExecuting(true);
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
       const response = await fetch(`/api/phase2/workflow/runs/${runId}/execute-async`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {
         await fetchRunDetails();
+      } else if (response.status === 401) {
+        router.push('/login');
       } else {
         setError('Failed to start async execution');
       }
@@ -160,13 +193,24 @@ export default function WorkflowExecutionDetail() {
 
   const cancelRun = async () => {
     try {
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
       const response = await fetch(`/api/phase2/workflow/runs/${runId}/cancel`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {
         await fetchRunDetails();
+      } else if (response.status === 401) {
+        router.push('/login');
       } else {
         setError('Failed to cancel workflow');
       }

@@ -323,11 +323,19 @@ class WorkflowService:
                 'step_id': next_step.step_id,
                 'input_artifacts': input_artifacts,
                 'config': next_step.configuration,
-                'user_prompt': user_prompt_override
+                'user_prompt': user_prompt_override,
+                # CRITICAL FIX: Extract document_text from configuration for AgentExecutionContext
+                'document_text': next_step.configuration.get('document_text'),
+                'components': next_step.configuration.get('components'),
+                'pipeline_id': str(run.run_id),
+                'user_config': next_step.configuration
             }
             
             # Execute agent: if it has an extract method (DFD style), call it; else fallback to mock
             logger.info(f"🤖 AGENT EXECUTION: Starting {next_step.agent_type} agent")
+            logger.info(f"📄 Document text available: {bool(context.get('document_text'))}")
+            if context.get('document_text'):
+                logger.info(f"📄 Document length: {len(context.get('document_text', ''))}")
             result: Dict[str, Any]
             try:
                 # Prefer agent.extract returning (model, metadata)
@@ -341,6 +349,7 @@ class WorkflowService:
                     
                     logger.debug(f"🔍 Getting LLM provider for agent: {next_step.agent_type}")
                     provider = await llm_service.get_provider(step=next_step.agent_type)
+                    logger.info(f"🔌 Using LLM provider: {provider.__class__.__name__} (model: {getattr(provider, 'model', 'unknown')})")
                     
                     logger.info(f"🚀 Calling agent.extract() with context and provider")
                     dfd_components, meta = await agent.extract(

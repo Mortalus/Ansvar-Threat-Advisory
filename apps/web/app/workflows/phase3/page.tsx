@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { getAuthToken, isAuthenticated } from '@/lib/auth-cookies';
 
 interface WorkflowTemplate {
   id: number;
@@ -61,26 +62,47 @@ export default function Phase3WorkflowPortal() {
   const [runProgress, setRunProgress] = useState<number>(0);
   const [dfdOutput, setDfdOutput] = useState<any | null>(null);
 
-  // Fetch templates on mount and set up polling
+  // Check authentication and fetch data
   useEffect(() => {
-    fetchTemplates();
-    fetchRuns();
+    const checkAuth = () => {
+      const token = (typeof window !== 'undefined') ? localStorage.getItem('session_token') : null;
+      if (!token) {
+        router.push('/login');
+        return false;
+      }
+      return true;
+    };
     
-    // Set up polling for runs every 3 seconds
-    const pollInterval = setInterval(() => {
+    if (checkAuth()) {
+      fetchTemplates();
       fetchRuns();
-    }, 3000);
-    
-    return () => clearInterval(pollInterval);
-  }, []);
+      
+      // Set up polling for runs every 3 seconds
+      const pollInterval = setInterval(() => {
+        fetchRuns();
+      }, 3000);
+      
+      return () => clearInterval(pollInterval);
+    }
+  }, [router]);
 
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/phase2/workflow/templates');
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
+      const response = await fetch('/api/phase2/workflow/templates', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setTemplates(data);
+      } else if (response.status === 401) {
+        router.push('/login');
       } else {
         setError('Failed to fetch workflow templates');
       }
@@ -93,10 +115,20 @@ export default function Phase3WorkflowPortal() {
 
   const fetchRuns = async () => {
     try {
-      const response = await fetch('/api/phase2/workflow/runs');
+      const token = getAuthToken();
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+      
+      const response = await fetch('/api/phase2/workflow/runs', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setRuns(data);
+      } else if (response.status === 401) {
+        router.push('/login');
       }
     } catch (err) {
       console.error('Error fetching runs:', err);
@@ -106,7 +138,7 @@ export default function Phase3WorkflowPortal() {
   const startWorkflow = async (templateId: number) => {
     try {
       setLoading(true);
-      const token = (typeof window !== 'undefined') ? localStorage.getItem('session_token') : null;
+      const token = getAuthToken();
       if (!token) {
         router.push('/login');
         return;
@@ -143,7 +175,7 @@ export default function Phase3WorkflowPortal() {
     try {
       setStarting(true);
       // Fetch templates fresh so we don't rely on state timing
-      const token = (typeof window !== 'undefined') ? localStorage.getItem('session_token') : null;
+      const token = getAuthToken();
       if (!token) {
         router.push('/login');
         return;
@@ -165,7 +197,7 @@ export default function Phase3WorkflowPortal() {
         return;
       }
 
-      const token2 = (typeof window !== 'undefined') ? localStorage.getItem('session_token') : null;
+      const token2 = getAuthToken();
       if (!token2) {
         // Redirect to login if not authenticated
         router.push('/login');
@@ -324,7 +356,7 @@ export default function Phase3WorkflowPortal() {
           <div className="space-y-4">
             <div className="grid gap-3">
               <Label htmlFor="dfd-text">Input</Label>
-              <Textarea id="dfd-text" rows={8} value={dfdText} onChange={(e) => setDfdText(e.target.value)} placeholder="Paste your system description here..." />
+              <Textarea id="dfd-text" rows={8} value={dfdText} onChange={(e) => setDfdText(e.target.value)} placeholder="Paste your system description here..." className="text-gray-900" />
               <div className="flex items-center gap-3">
                 <input id="dfd-file" type="file" accept=".txt" onChange={(e) => { const f=e.target.files?.[0]; if (f) handleFileUpload(f); }} />
                 <span className="text-xs text-gray-500">Upload .txt to prefill</span>
