@@ -70,6 +70,7 @@ export class ErrorHandler {
   private errorQueue: ErrorLogEntry[] = [];
   private isOnline = navigator.onLine;
   private sessionId = this.generateSessionId();
+  private serverLoggingEnabled = false; // Disabled by default to prevent backend errors
 
   private constructor() {
     this.setupGlobalErrorHandlers();
@@ -281,12 +282,13 @@ export class ErrorHandler {
     // Store locally first
     this.storeErrorLocally(logEntry);
 
-    // Try to send to server if online
-    if (this.isOnline) {
+    // Try to send to server if online and server logging is enabled
+    if (this.isOnline && this.serverLoggingEnabled) {
       this.sendErrorToServer(logEntry);
-    } else {
+    } else if (this.serverLoggingEnabled) {
       this.errorQueue.push(logEntry);
     }
+    // If server logging disabled, just store locally and continue
   }
 
   private getSeverity(error: AppError): 'low' | 'medium' | 'high' | 'critical' {
