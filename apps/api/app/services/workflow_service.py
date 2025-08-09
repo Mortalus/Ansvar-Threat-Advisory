@@ -16,7 +16,7 @@ from app.models.workflow import (
     WorkflowStatus, StepStatus
 )
 from app.models import User
-from app.core.agents.registry import AgentRegistry
+from app.core.agents.registry import AgentRegistry, agent_registry
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -123,7 +123,8 @@ class WorkflowService:
     """
     
     def __init__(self):
-        self.agent_registry = AgentRegistry()
+        # Use the global registry so discovery performed at startup/endpoints is respected
+        self.agent_registry = agent_registry
         self.dag_validator = DAGValidator()
     
     async def create_template(

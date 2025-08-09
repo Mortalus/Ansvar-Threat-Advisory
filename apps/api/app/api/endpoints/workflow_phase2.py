@@ -17,26 +17,30 @@ from app.services.workflow_service import WorkflowService, WorkflowExecutionErro
 from app.tasks.workflow_tasks import execute_workflow_run, execute_workflow_step
 from app.api.v1.auth import get_current_user
 from app.models.rbac import PermissionType
+from app.core.agents.registry import agent_registry
 
-async def check_permission(db: AsyncSession, user: User, permission: PermissionType) -> bool:
-    """Simple permission check for Phase 2."""
-    # For Phase 2, we'll do a simple check
+async def check_permission(db: AsyncSession, user: Optional[User], permission: PermissionType) -> bool:
+    """Simple permission check for Phase 2 with safe None handling.
+
+    - Admin users have all permissions
+    - Read-only permissions are allowed for unauthenticated users in Phase 2 to enable demos
+    - Write/control permissions require authentication (non-admins currently denied)
+    """
     # Admin users have all permissions
-    if user.is_admin:
+    if user and getattr(user, "is_admin", False):
         return True
-    
-    # For non-admin users, check specific permissions
-    # This is simplified for Phase 2 - Phase 3+ will use full RBAC
+
+    # Read permissions (allow for everyone in Phase 2 demo)
     read_permissions = [
         PermissionType.WORKFLOW_TEMPLATE_VIEW,
         PermissionType.WORKFLOW_RUN_VIEW,
-        PermissionType.WORKFLOW_ARTIFACT_VIEW
+        PermissionType.WORKFLOW_ARTIFACT_VIEW,
     ]
-    
     if permission in read_permissions:
-        return True  # All authenticated users can view
-    
-    return False  # Deny by default
+        return True
+
+    # Non-read permissions require authenticated admin in Phase 2
+    return False
 
 router = APIRouter(prefix="/phase2/workflow", tags=["workflow-phase2"])
 
@@ -91,7 +95,7 @@ class WorkflowTemplateResponse(BaseModel):
     name: str
     description: str
     category: Optional[str]
-    version: int
+    version: str
     is_active: bool
     created_at: str
     steps_count: int
@@ -253,6 +257,66 @@ async def get_workflow_template(
         "execution_order": execution_order,
         "steps_count": len(template.definition.get('steps', {}))
     }
+
+
+@router.post("/templates/seed-demo")
+async def seed_demo_template(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Create a demo workflow template with a simple 3-step DAG.
+    Phase 2 demo convenience endpoint: allowed without authentication.
+    """
+    try:
+        # Ensure agents are discovered so validation passes
+        try:
+            agent_registry.discover_agents()
+        except Exception:
+            pass
+        definition: Dict[str, Any] = {
+            "steps": {
+                "document_analysis": {
+                    "agent_type": "document_analysis",
+                    "config": {"depth": "basic"},
+                    "depends_on": []
+                },
+                "architectural_risk": {
+                    "agent_type": "architectural_risk",
+                    "config": {"threshold": 0.8},
+                    "depends_on": ["document_analysis"]
+                },
+                "business_financial": {
+                    "agent_type": "business_financial",
+                    "config": {"focus": "summary"},
+                    "depends_on": ["architectural_risk"]
+                }
+            }
+        }
+        template_obj = await workflow_service.create_template(
+            db=db,
+            name="Demo Threat Modeling Workflow",
+            description="Demonstration of modular agent workflow (analysis → risk → business)",
+            definition=definition,
+            user=current_user,
+            category="demo"
+        )
+
+        return WorkflowTemplateResponse(
+            id=template_obj.id,
+            name=template_obj.name,
+            description=template_obj.description,
+            category=template_obj.category,
+            version=template_obj.version,
+            is_active=template_obj.is_active,
+            created_at=template_obj.created_at.isoformat(),
+            steps_count=len(template_obj.definition.get("steps", {}))
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to seed demo template: {str(e)}"
+        )
 
 
 @router.post("/runs/start", response_model=WorkflowRunResponse)

@@ -162,6 +162,21 @@ export default function WorkflowTemplatesPage() {
           <Button variant="outline" onClick={() => setView(view === 'grid' ? 'list' : 'grid')}>
             {view === 'grid' ? <List className="h-4 w-4" /> : <Grid3X3 className="h-4 w-4" />}
           </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/phase2/workflow/templates/seed-demo', { method: 'POST' });
+                if (res.ok) {
+                  await fetchTemplates();
+                }
+              } catch (e) {
+                console.error('Failed to seed demo template', e);
+              }
+            }}
+          >
+            Seed Demo
+          </Button>
           <Link href="/workflows/templates/create">
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -264,6 +279,27 @@ export default function WorkflowTemplatesPage() {
                             Execute
                           </Button>
                         </Link>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={async () => {
+                            try {
+                              const detailRes = await fetch(`/api/phase2/workflow/templates/${template.id}`);
+                              if (detailRes.ok) {
+                                const detail = await detailRes.json();
+                                alert(`DAG Preview (steps: ${detail.steps_count})\n\n` +
+                                  Object.entries(detail.definition.steps)
+                                    .map(([k, v]: any) => `${k} → depends_on: ${(v.depends_on || []).join(', ') || 'none'}`)
+                                    .join('\n')
+                                );
+                              }
+                            } catch (e) {
+                              console.error('Failed to preview DAG', e);
+                            }
+                          }}
+                        >
+                          Preview DAG
+                        </Button>
                         <div className="flex gap-1">
                           <Link href={`/workflows/templates/${template.id}/edit`}>
                             <Button variant="outline" size="sm">
