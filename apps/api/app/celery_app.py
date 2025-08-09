@@ -10,8 +10,9 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "app.tasks.pipeline_tasks",
-        "app.tasks.llm_tasks",
+        "app.tasks.llm_tasks", 
         "app.tasks.knowledge_base_tasks",
+        "app.tasks.workflow_tasks",  # Add our defensive workflow tasks
     ]
 )
 

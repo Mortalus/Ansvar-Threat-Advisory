@@ -167,8 +167,14 @@ def configure_app_loggers():
     
     # Enable detailed logging for our application
     logging.getLogger("app").setLevel(logging.INFO)
-    logging.getLogger("app.core").setLevel(logging.DEBUG)
+    logging.getLogger("app.core").setLevel(logging.INFO)
     logging.getLogger("app.api").setLevel(logging.INFO)
+    logging.getLogger("app.services").setLevel(logging.INFO)
+    logging.getLogger("app.tasks").setLevel(logging.INFO)
+    
+    # Ensure Celery workers get our logs
+    logging.getLogger("celery").setLevel(logging.WARNING)
+    logging.getLogger("celery.task").setLevel(logging.INFO)
 
 def get_logger(name: str) -> RequestContextLogger:
     """Get a context-aware logger instance"""

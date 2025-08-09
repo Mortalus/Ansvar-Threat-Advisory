@@ -51,10 +51,11 @@ export default function WorkflowHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedRun, setExpandedRun] = useState<string | null>(null);
+  const [limit, setLimit] = useState<number>(10);
 
   useEffect(() => {
     fetchRuns();
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     filterRuns();
@@ -63,7 +64,8 @@ export default function WorkflowHistoryPage() {
   const fetchRuns = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/phase2/workflow/runs?limit=50');
+      const limitParam = limit === -1 ? 1000 : limit; // Use large number for 'all'
+      const response = await fetch(`/api/phase2/workflow/runs?limit=${limitParam}`);
       if (response.ok) {
         const data = await response.json();
         setRuns(data);
@@ -212,18 +214,37 @@ export default function WorkflowHistoryPage() {
           />
         </div>
         
-        <div className="flex gap-2">
-          {statuses.map((status) => (
-            <Button
-              key={status}
-              variant={statusFilter === status ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter(status)}
-              className="capitalize whitespace-nowrap"
-            >
-              {status === 'all' ? 'All Status' : status}
-            </Button>
-          ))}
+        <div className="flex gap-2 items-center">
+          <div className="flex gap-1">
+            {statuses.map((status) => (
+              <Button
+                key={status}
+                variant={statusFilter === status ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter(status)}
+                className="capitalize whitespace-nowrap"
+              >
+                {status === 'all' ? 'All Status' : status}
+              </Button>
+            ))}
+          </div>
+          
+          <div className="flex items-center gap-2 border-l pl-4 ml-2">
+            <span className="text-sm text-gray-600 whitespace-nowrap">Show:</span>
+            <div className="flex gap-1">
+              {[10, 20, 30, 40, 50, -1].map((limitOption) => (
+                <Button
+                  key={limitOption}
+                  variant={limit === limitOption ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setLimit(limitOption)}
+                  className="min-w-12"
+                >
+                  {limitOption === -1 ? 'All' : limitOption.toString()}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -421,6 +442,11 @@ export default function WorkflowHistoryPage() {
       {filteredRuns.length > 0 && (
         <div className="text-sm text-gray-500 text-center pt-4 border-t">
           Showing {filteredRuns.length} of {runs.length} execution{runs.length !== 1 ? 's' : ''}
+          {limit !== -1 && runs.length >= limit && (
+            <span className="ml-2 text-blue-600">
+              (Limited to {limit} most recent)
+            </span>
+          )}
         </div>
       )}
     </div>

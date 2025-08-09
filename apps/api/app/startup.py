@@ -30,7 +30,8 @@ async def initialize_default_data():
             # Seed default Threat Modeling workflow template if missing
             try:
                 from sqlalchemy import select
-                from app.models.workflow_template import WorkflowTemplate
+                # Import the correct model (our unified workflow model is in app.models.workflow)
+                from app.models.workflow import WorkflowTemplate
                 from app.services.llm_service import LLMService
 
                 # Check if a default template exists by name
@@ -274,7 +275,7 @@ async def initialize_default_data_robust():
             # Seed default Threat Modeling workflow template if missing
             try:
                 from sqlalchemy import select
-                from app.models.workflow_template import WorkflowTemplate
+                from app.models.workflow import WorkflowTemplate
                 from app.services.llm_service import LLMService
 
                 # Check if a default template exists by name

@@ -54,8 +54,10 @@ interface WorkflowArtifact {
   name: string;
   artifact_type: string;
   version: number;
-  size?: number;
+  size_bytes?: number;
   created_at: string;
+  content_json?: any;
+  content_text?: string;
 }
 
 export default function WorkflowExecutionDetail() {
@@ -67,6 +69,7 @@ export default function WorkflowExecutionDetail() {
   const [artifacts, setArtifacts] = useState<WorkflowArtifact[]>([]);
   const [selectedStep, setSelectedStep] = useState<WorkflowStep | null>(null);
   const [loading, setLoading] = useState(true);
+  const [artifactJson, setArtifactJson] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
@@ -79,7 +82,7 @@ export default function WorkflowExecutionDetail() {
         setRunDetails(data);
         
         // Auto-refresh if still running
-        if (data.status === 'running') {
+        if (data.status === 'running' || data.status === 'created') {
           setTimeout(fetchRunDetails, 2000); // Poll every 2 seconds
         }
       } else {
@@ -95,6 +98,24 @@ export default function WorkflowExecutionDetail() {
   useEffect(() => {
     fetchRunDetails();
   }, [fetchRunDetails]);
+
+  useEffect(() => {
+    const loadArtifacts = async () => {
+      try {
+        const res = await fetch(`/api/phase2/workflow/runs/${runId}/artifacts?include_content=true`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setArtifacts(data.artifacts || []);
+        const primary = (data.artifacts || []).find((a: any) => a.name?.endsWith('_output'));
+        if (primary?.content_json?.dfd_components) {
+          setArtifactJson(primary.content_json.dfd_components);
+        } else if (primary?.content_json) {
+          setArtifactJson(primary.content_json);
+        }
+      } catch {}
+    };
+    loadArtifacts();
+  }, [runId, runDetails?.status]);
 
   const executeNextStep = async () => {
     try {
@@ -394,6 +415,65 @@ export default function WorkflowExecutionDetail() {
         </CardContent>
       </Card>
 
+      {/* Workflow Results */}
+      {(runDetails.status === 'completed' || artifacts.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileJson className="h-5 w-5" />
+              Workflow Results
+            </CardTitle>
+            <CardDescription>
+              Output artifacts and results from workflow execution
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {artifacts.length > 0 ? (
+              <div className="space-y-4">
+                {artifacts.map((artifact: any, index: number) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        <span className="font-medium">{artifact.name}</span>
+                        <Badge variant="outline">{artifact.artifact_type}</Badge>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        v{artifact.version} • {artifact.size_bytes ? `${Math.round(artifact.size_bytes / 1024)}KB` : 'N/A'}
+                      </div>
+                    </div>
+                    {artifact.content_json && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium text-gray-700 mb-2">Content:</div>
+                        <pre className="text-xs bg-gray-50 text-gray-900 p-3 rounded overflow-auto max-h-60 border">
+                          {JSON.stringify(artifact.content_json, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {artifact.content_text && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium text-gray-700 mb-2">Content:</div>
+                        <div className="text-sm bg-gray-50 text-gray-900 p-3 rounded border max-h-60 overflow-auto">
+                          {artifact.content_text}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 mx-auto text-gray-300" />
+                <p className="text-gray-500 mt-2">No results available yet</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Results will appear here when the workflow completes
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Selected Step Details */}
       {selectedStep && (
         <Card>
@@ -429,10 +509,12 @@ export default function WorkflowExecutionDetail() {
             </div>
             
             <div className="mt-4 pt-4 border-t">
-              <h4 className="font-medium mb-2">Step Artifacts</h4>
-              <div className="text-sm text-gray-600">
-                Artifacts for this step will be displayed here
-              </div>
+              <h4 className="font-medium mb-2">Step Output</h4>
+              {artifactJson ? (
+                <pre className="text-xs bg-gray-50 text-gray-900 p-3 rounded overflow-auto max-h-80">{JSON.stringify(artifactJson, null, 2)}</pre>
+              ) : (
+                <div className="text-sm text-gray-600">No output JSON available for this step</div>
+              )}
             </div>
           </CardContent>
         </Card>

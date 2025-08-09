@@ -17,6 +17,7 @@ from app.models.workflow import (
 )
 from app.models import User
 from app.core.agents.registry import AgentRegistry, agent_registry
+from app.core.agents.base import AgentExecutionContext
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -172,7 +173,7 @@ class WorkflowService:
     async def start_run(
         self,
         db: AsyncSession,
-        template_id: uuid.UUID,
+        template_id: int,
         user: User,
         initial_context: Optional[Dict[str, Any]] = None
     ) -> WorkflowRun:
@@ -209,21 +210,29 @@ class WorkflowService:
         )
         
         db.add(run)
+        # Flush to assign run.id before creating child rows
+        await db.flush()
         
         # Create step executions
         execution_order = self.dag_validator.get_execution_order(template.definition)
         for position, step_id in enumerate(execution_order):
             step_def = template.definition['steps'][step_id]
             
-            step_exec = WorkflowStepExecution(
-                run_id=run.id,
-                step_id=step_id,
-                agent_type=step_def['agent_type'],
-                status=StepStatus.PENDING,
-                position=position,
-                config=step_def.get('config', {}),
-                depends_on=step_def.get('depends_on', [])
-            )
+            # Merge initial_context into the first step's config to pass inputs (e.g., document_text)
+            step_config: Dict[str, Any] = step_def.get('config', {}).copy()
+            if position == 0 and initial_context:
+                # Only include safe known keys to avoid leaking unrelated context
+                for key in ("document_text",):
+                    if key in initial_context and key not in step_config:
+                        step_config[key] = initial_context[key]
+
+            step_exec = WorkflowStepExecution()
+            step_exec.run_id = run.id
+            step_exec.step_id = step_id
+            step_exec.agent_type = step_def['agent_type']
+            step_exec.status = StepStatus.PENDING
+            step_exec.execution_order = position
+            step_exec.configuration = step_config
             db.add(step_exec)
         
         await db.commit()
@@ -239,23 +248,34 @@ class WorkflowService:
         user_prompt_override: Optional[str] = None
     ) -> Optional[WorkflowStepExecution]:
         """
-        Execute the next pending step in a workflow run.
+        Execute the next pending step in a workflow run with comprehensive logging.
         Returns the executed step or None if no steps are ready.
         """
-        # Get run with steps
-        result = await db.execute(
-            select(WorkflowRun)
-            .options(selectinload(WorkflowRun.step_executions))
-            .where(WorkflowRun.id == run_id)
-        )
-        run = result.scalar_one_or_none()
+        logger.info(f"🔍 WORKFLOW SERVICE: Starting step execution for run {run_id}")
         
-        if not run:
-            raise WorkflowExecutionError(f"Run {run_id} not found")
-        
-        if run.status in [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED]:
-            logger.info(f"Run {run.run_id} is in terminal state {run.status}")
-            return None
+        try:
+            # Get run with steps
+            logger.debug(f"📊 Fetching workflow run from database")
+            result = await db.execute(
+                select(WorkflowRun)
+                .options(selectinload(WorkflowRun.step_executions))
+                .where(WorkflowRun.run_id == run_id)
+            )
+            run = result.scalar_one_or_none()
+            
+            if not run:
+                logger.error(f"❌ Workflow run not found: {run_id}")
+                raise WorkflowExecutionError(f"Run {run_id} not found")
+            
+            logger.info(f"✅ Found workflow run: ID={run.id}, Status={run.status}, Steps={len(run.step_executions)}")
+            
+            if run.status in [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED]:
+                logger.info(f"⚠️ Run {run.run_id} is in terminal state {run.status}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching workflow run: {str(e)}")
+            raise WorkflowExecutionError(f"Failed to fetch run {run_id}: {str(e)}")
         
         # Find next executable step
         next_step = await self._find_next_executable_step(db, run)
@@ -277,7 +297,8 @@ class WorkflowService:
         # Execute step
         try:
             # Update run status if needed
-            if run.status == WorkflowStatus.PENDING:
+            # Transition from created to running
+            if (isinstance(run.status, str) and run.status == WorkflowStatus.CREATED.value) or run.status == WorkflowStatus.CREATED:
                 run.status = WorkflowStatus.RUNNING
                 run.started_at = datetime.utcnow()
             
@@ -298,15 +319,50 @@ class WorkflowService:
             
             # Prepare execution context
             context = {
-                'run_id': run.run_id,
+                'run_id': str(run.run_id),
                 'step_id': next_step.step_id,
                 'input_artifacts': input_artifacts,
-                'config': next_step.config,
+                'config': next_step.configuration,
                 'user_prompt': user_prompt_override
             }
             
-            # Execute agent (simplified for Phase 2)
-            result = await self._execute_agent(agent, context)
+            # Execute agent: if it has an extract method (DFD style), call it; else fallback to mock
+            logger.info(f"🤖 AGENT EXECUTION: Starting {next_step.agent_type} agent")
+            result: Dict[str, Any]
+            try:
+                # Prefer agent.extract returning (model, metadata)
+                if hasattr(agent, "extract"):
+                    logger.info(f"🔧 Agent has extract method, executing DFD-style extraction")
+                    logger.debug(f"📝 Execution context: {context}")
+                    
+                    from app.services.llm_service import LLMService
+                    logger.debug("🏗️ Initializing LLMService")
+                    llm_service = LLMService()
+                    
+                    logger.debug(f"🔍 Getting LLM provider for agent: {next_step.agent_type}")
+                    provider = await llm_service.get_provider(step=next_step.agent_type)
+                    
+                    logger.info(f"🚀 Calling agent.extract() with context and provider")
+                    dfd_components, meta = await agent.extract(
+                        context=AgentExecutionContext(**context),  # type: ignore[arg-type]
+                        llm_provider=provider,
+                        db_session=db,
+                        settings_service=None,
+                    )
+                    logger.info(f"✅ Agent extraction completed successfully")
+                    logger.debug(f"📊 Token usage: {meta}")
+                    result = {
+                        "status": "success",
+                        "agent": next_step.agent_type,
+                        "dfd_components": dfd_components.model_dump(),
+                        "metadata": meta,
+                    }
+                else:
+                    # Fallback to existing mock path
+                    result = await self._execute_agent(agent, context)
+            except Exception as exec_err:
+                logger.error(f"Agent execution failed: {exec_err}")
+                raise
             
             # Create output artifact
             output_artifact = WorkflowArtifact(
@@ -324,13 +380,20 @@ class WorkflowService:
             # Update step execution
             next_step.status = StepStatus.COMPLETED
             next_step.completed_at = datetime.utcnow()
-            next_step.output_artifact_ids = [str(output_artifact.id)]
-            next_step.execution_time_ms = int(
-                (next_step.completed_at - next_step.started_at).total_seconds() * 1000
-            )
+            # Persist to assign artifact ID
+            await db.flush()
+            next_step.output_artifacts = [output_artifact.id]
+            if next_step.started_at and next_step.completed_at:
+                next_step.duration_seconds = int((next_step.completed_at - next_step.started_at).total_seconds())
             
             # Update run progress
             run.completed_steps += 1
+            
+            # CRITICAL FIX: Check if this was the last step and mark run as COMPLETED immediately
+            if run.completed_steps >= run.total_steps:
+                logger.info(f"🎉 All steps completed! Marking run {run.run_id} as COMPLETED")
+                run.status = WorkflowStatus.COMPLETED
+                run.completed_at = datetime.utcnow()
             
             await db.commit()
             await db.refresh(next_step)
@@ -365,17 +428,18 @@ class WorkflowService:
         run: WorkflowRun
     ) -> Optional[WorkflowStepExecution]:
         """Find the next step that can be executed based on dependencies."""
-        for step in sorted(run.step_executions, key=lambda s: s.position):
+        for step in sorted(run.step_executions, key=lambda s: (s.execution_order or 0)):
             if step.status != StepStatus.PENDING:
                 continue
             
             # Check if all dependencies are complete
-            if step.depends_on:
-                dep_steps = [s for s in run.step_executions if s.step_id in step.depends_on]
-                all_deps_complete = all(
-                    dep.status == StepStatus.COMPLETED for dep in dep_steps
-                )
-                
+            try:
+                deps = run.run_definition.get('steps', {}).get(step.step_id, {}).get('depends_on', [])
+            except Exception:
+                deps = []
+            if deps:
+                dep_steps = [s for s in run.step_executions if s.step_id in deps]
+                all_deps_complete = all(s.status == StepStatus.COMPLETED for s in dep_steps)
                 if not all_deps_complete:
                     continue
             
@@ -390,7 +454,8 @@ class WorkflowService:
         step: WorkflowStepExecution
     ) -> List[WorkflowArtifact]:
         """Get input artifacts for a step based on dependencies."""
-        if not step.depends_on:
+        deps = run.run_definition.get('steps', {}).get(step.step_id, {}).get('depends_on', [])
+        if not deps:
             return []
         
         # Get latest artifacts from dependent steps
@@ -398,7 +463,7 @@ class WorkflowService:
             select(WorkflowArtifact).where(
                 and_(
                     WorkflowArtifact.run_id == run.id,
-                    WorkflowArtifact.step_id.in_(step.depends_on),
+                    WorkflowArtifact.producing_step_id.in_(deps),
                     WorkflowArtifact.is_latest == True
                 )
             )
@@ -433,7 +498,7 @@ class WorkflowService:
         result = await db.execute(
             select(WorkflowRun)
             .options(selectinload(WorkflowRun.step_executions))
-            .where(WorkflowRun.id == run_id)
+            .where(WorkflowRun.run_id == run_id)
         )
         run = result.scalar_one_or_none()
         
@@ -442,13 +507,13 @@ class WorkflowService:
         
         # Get artifacts count
         artifact_result = await db.execute(
-            select(WorkflowArtifact).where(WorkflowArtifact.run_id == run_id)
+            select(WorkflowArtifact).where(WorkflowArtifact.run_id == run.id)
         )
         artifacts = list(artifact_result.scalars().all())
         
         return {
-            'run_id': run.run_id,
-            'status': run.status.value,
+            'run_id': str(run.run_id),
+            'status': run.status.value if hasattr(run.status, 'value') else run.status,
             'progress': run.get_progress_percentage(),
             'total_steps': run.total_steps,
             'completed_steps': run.completed_steps,
@@ -458,12 +523,12 @@ class WorkflowService:
                 {
                     'step_id': step.step_id,
                     'agent_type': step.agent_type,
-                    'status': step.status.value,
-                    'position': step.position,
+                    'status': step.status.value if hasattr(step.status, 'value') else step.status,
+                    'position': step.execution_order,
                     'retry_count': step.retry_count,
-                    'execution_time_ms': step.execution_time_ms
+                    'execution_time_ms': (step.duration_seconds or 0) * 1000 if getattr(step, 'duration_seconds', None) is not None else None
                 }
-                for step in sorted(run.step_executions, key=lambda s: s.position)
+                for step in sorted(run.step_executions, key=lambda s: (s.execution_order or 0))
             ],
             'artifacts_count': len(artifacts),
             'can_retry': run.can_retry(),
@@ -477,7 +542,7 @@ class WorkflowService:
     ) -> WorkflowRun:
         """Cancel a running workflow."""
         result = await db.execute(
-            select(WorkflowRun).where(WorkflowRun.id == run_id)
+            select(WorkflowRun).where(WorkflowRun.run_id == run_id)
         )
         run = result.scalar_one_or_none()
         

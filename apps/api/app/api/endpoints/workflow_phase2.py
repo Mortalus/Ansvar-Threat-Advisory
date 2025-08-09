@@ -12,22 +12,24 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import get_db
 from app.models import User
-from app.models.workflow import WorkflowTemplate, WorkflowRun, WorkflowStatus
+from app.models.workflow import WorkflowTemplate, WorkflowRun, WorkflowStatus, WorkflowArtifact
 from app.services.workflow_service import WorkflowService, WorkflowExecutionError
 from app.tasks.workflow_tasks import execute_workflow_run, execute_workflow_step
 from app.api.v1.auth import get_current_user
 from app.models.rbac import PermissionType
 from app.core.agents.registry import agent_registry
+from app.core.agents.base import AgentExecutionContext
 
 async def check_permission(db: AsyncSession, user: Optional[User], permission: PermissionType) -> bool:
-    """Simple permission check for Phase 2 with safe None handling.
+    """Phase 2 permission check with relaxed rules for demo UX.
 
-    - Admin users have all permissions
-    - Read-only permissions are allowed for unauthenticated users in Phase 2 to enable demos
-    - Write/control permissions require authentication (non-admins currently denied)
+    - Superusers/admins have all permissions
+    - Read-only permissions are allowed for everyone (unauth included)
+    - Run creation/control is allowed for any authenticated user
+    - Template creation/edit/delete remains admin-only
     """
-    # Admin users have all permissions
-    if user and getattr(user, "is_admin", False):
+    # Superusers/admins have all permissions
+    if user and (getattr(user, "is_admin", False) or getattr(user, "is_superuser", False)):
         return True
 
     # Read permissions (allow for everyone in Phase 2 demo)
@@ -39,7 +41,14 @@ async def check_permission(db: AsyncSession, user: Optional[User], permission: P
     if permission in read_permissions:
         return True
 
-    # Non-read permissions require authenticated admin in Phase 2
+    # Allow authenticated users to start/control their runs in Phase 2
+    user_write_permissions_relaxed = [
+        PermissionType.WORKFLOW_RUN_CREATE,
+        PermissionType.WORKFLOW_RUN_CONTROL,
+    ]
+    if permission in user_write_permissions_relaxed and user is not None:
+        return True
+
     return False
 
 router = APIRouter(prefix="/phase2/workflow", tags=["workflow-phase2"])
@@ -81,7 +90,8 @@ class WorkflowTemplateCreate(BaseModel):
 
 
 class WorkflowRunStart(BaseModel):
-    template_id: UUID
+    # Template primary key is integer in DB
+    template_id: int
     initial_context: Optional[Dict[str, Any]] = Field(default_factory=dict)
     auto_execute: bool = Field(False, description="Automatically start execution")
 
@@ -91,7 +101,8 @@ class WorkflowStepTrigger(BaseModel):
 
 
 class WorkflowTemplateResponse(BaseModel):
-    id: UUID
+    # Template primary key is integer in DB
+    id: int
     name: str
     description: str
     category: Optional[str]
@@ -102,9 +113,10 @@ class WorkflowTemplateResponse(BaseModel):
 
 
 class WorkflowRunResponse(BaseModel):
-    id: UUID
+    # Run primary key is integer; run_id is UUID string field
+    id: int
     run_id: str
-    template_id: UUID
+    template_id: int
     status: str
     progress: float
     total_steps: int
@@ -174,7 +186,7 @@ async def list_workflow_templates(
     category: Optional[str] = None,
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     List available workflow templates.
@@ -219,7 +231,7 @@ async def list_workflow_templates(
 async def get_workflow_template(
     template_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Get detailed workflow template including DAG definition.
@@ -276,29 +288,31 @@ async def seed_demo_template(
             pass
         definition: Dict[str, Any] = {
             "steps": {
-                "document_analysis": {
-                    "agent_type": "document_analysis",
-                    "config": {"depth": "basic"},
+                "dfd_extraction": {
+                    "agent_type": "dfd_extractor",
+                    "config": {},
                     "depends_on": []
-                },
-                "architectural_risk": {
-                    "agent_type": "architectural_risk",
-                    "config": {"threshold": 0.8},
-                    "depends_on": ["document_analysis"]
-                },
-                "business_financial": {
-                    "agent_type": "business_financial",
-                    "config": {"focus": "summary"},
-                    "depends_on": ["architectural_risk"]
                 }
             }
         }
+        # Determine creator (fallback to first user if no auth user provided)
+        creator: Optional[User] = current_user
+        if creator is None:
+            from sqlalchemy import select as _select
+            res_user = await db.execute(_select(User).limit(1))
+            creator = res_user.scalar_one_or_none()
+            if creator is None:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No user found to assign as template creator. Create an admin user first."
+                )
+
         template_obj = await workflow_service.create_template(
             db=db,
-            name="Demo Threat Modeling Workflow",
-            description="Demonstration of modular agent workflow (analysis → risk → business)",
+            name="DFD Extractor (Single-step)",
+            description="Single-step workflow using the DFD Extractor agent",
             definition=definition,
-            user=current_user,
+            user=creator,
             category="demo"
         )
 
@@ -353,9 +367,9 @@ async def start_workflow_run(
         
         return WorkflowRunResponse(
             id=run.id,
-            run_id=run.run_id,
+            run_id=str(run.run_id),
             template_id=run.template_id,
-            status=run.status.value,
+            status=run.status.value if hasattr(run.status, "value") else run.status,
             progress=run.get_progress_percentage(),
             total_steps=run.total_steps,
             completed_steps=run.completed_steps,
@@ -397,6 +411,90 @@ async def get_workflow_run_status(
             detail=str(e)
         )
 
+
+@router.get("/runs/{run_id}/artifacts")
+async def list_run_artifacts(
+    run_id: UUID,
+    include_content: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    List artifacts for a workflow run. Optionally include content for small JSON/text artifacts.
+    """
+    # View permission (allow for all in Phase 2 demo)
+    if not await check_permission(db, current_user, PermissionType.WORKFLOW_ARTIFACT_VIEW):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to view artifacts")
+
+    result = await db.execute(select(WorkflowRun).where(WorkflowRun.run_id == run_id))
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    artifacts_result = await db.execute(select(WorkflowArtifact).where(WorkflowArtifact.run_id == run.id))
+    rows = list(artifacts_result.scalars().all())
+
+    items = []
+    for a in rows:
+        item = {
+            "name": a.name,
+            "artifact_type": a.artifact_type,
+            "version": a.version,
+            "is_latest": a.is_latest,
+            "size_bytes": a.size_bytes,
+        }
+        if include_content:
+            content = a.get_content()
+            # Only include content if JSON/text small (< 128KB)
+            try:
+                import json as _json
+                if isinstance(content, (dict, list)):
+                    payload = _json.dumps(content)
+                    if len(payload.encode("utf-8")) <= 131072:
+                        item["content_json"] = content
+                elif isinstance(content, str) and len(content.encode("utf-8")) <= 131072:
+                    item["content_text"] = content
+            except Exception:
+                pass
+        items.append(item)
+
+    return {"artifacts": items}
+
+
+@router.get("/runs/{run_id}/artifacts/{artifact_name}")
+async def get_run_artifact(
+    run_id: UUID,
+    artifact_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Get a specific artifact by name (latest version).
+    """
+    if not await check_permission(db, current_user, PermissionType.WORKFLOW_ARTIFACT_VIEW):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to view artifacts")
+
+    result = await db.execute(select(WorkflowRun).where(WorkflowRun.run_id == run_id))
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    art_query = select(WorkflowArtifact).where(
+        and_(WorkflowArtifact.run_id == run.id, WorkflowArtifact.name == artifact_name, WorkflowArtifact.is_latest == True)
+    )
+    art_res = await db.execute(art_query)
+    artifact = art_res.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+
+    content = artifact.get_content()
+    if isinstance(content, (dict, list)):
+        return {"name": artifact.name, "artifact_type": artifact.artifact_type, "content": content}
+    elif isinstance(content, str):
+        return {"name": artifact.name, "artifact_type": artifact.artifact_type, "content": content}
+    else:
+        # For binary, return metadata only
+        return {"name": artifact.name, "artifact_type": artifact.artifact_type, "size_bytes": artifact.size_bytes}
 
 @router.post("/runs/{run_id}/execute-next")
 async def execute_next_step(
@@ -464,7 +562,7 @@ async def execute_workflow_async(
     
     # Verify run exists and is in valid state
     result = await db.execute(
-        select(WorkflowRun).where(WorkflowRun.id == run_id)
+        select(WorkflowRun).where(WorkflowRun.run_id == run_id)
     )
     run = result.scalar_one_or_none()
     
@@ -474,7 +572,7 @@ async def execute_workflow_async(
             detail="Workflow run not found"
         )
     
-    if run.status not in [WorkflowStatus.PENDING, WorkflowStatus.RUNNING]:
+    if run.status not in [WorkflowStatus.CREATED, WorkflowStatus.RUNNING]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot execute run in {run.status} state"
@@ -512,7 +610,7 @@ async def cancel_workflow_run(
         
         return {
             "status": "cancelled",
-            "run_id": run.run_id,
+            "run_id": str(run.run_id),
             "message": "Workflow run cancelled successfully"
         }
         
@@ -529,7 +627,7 @@ async def list_workflow_runs(
     limit: int = 20,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     List workflow runs with optional filtering.
@@ -547,9 +645,9 @@ async def list_workflow_runs(
     if status_filter:
         query = query.where(WorkflowRun.status == status_filter)
     
-    # Add user filter for non-admins
-    if not current_user.is_admin:
-        query = query.where(WorkflowRun.started_by_id == current_user.id)
+    # Add user filter for non-admins when authenticated
+    if current_user and not getattr(current_user, "is_admin", False):
+        query = query.where(WorkflowRun.user_id == current_user.id)
     
     # Add ordering and pagination
     query = query.order_by(WorkflowRun.created_at.desc()).limit(limit).offset(offset)
@@ -560,9 +658,9 @@ async def list_workflow_runs(
     return [
         WorkflowRunResponse(
             id=run.id,
-            run_id=run.run_id,
+            run_id=str(run.run_id),
             template_id=run.template_id,
-            status=run.status.value,
+            status=run.status.value if hasattr(run.status, "value") else run.status,
             progress=run.get_progress_percentage(),
             total_steps=run.total_steps,
             completed_steps=run.completed_steps,
