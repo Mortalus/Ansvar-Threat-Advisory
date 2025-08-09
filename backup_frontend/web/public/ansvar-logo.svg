@@ -1,0 +1,26 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .logo-dark { fill: #4a4a5a; }
+      .logo-light { fill: #e2e8f0; }
+      .logo-accent { fill: #6366f1; }
+    </style>
+  </defs>
+  
+  <!-- Main "A" letter -->
+  <path class="logo-dark" d="M130 380 L130 340 L160 200 L190 140 L210 140 L240 200 L270 340 L270 380 L230 380 L220 320 L180 320 L170 380 L130 380 Z M190 260 L210 260 L205 240 L195 240 L190 260 Z"/>
+  
+  <!-- Stylized human figure integrated into the A -->
+  <g transform="translate(200, 220)">
+    <!-- Head -->
+    <circle class="logo-light" cx="0" cy="-10" r="12"/>
+    
+    <!-- Body curve -->
+    <path class="logo-accent" d="M -8 5 Q -5 15 0 25 Q 5 35 15 40 Q 25 35 30 25" 
+          stroke-width="3" fill="none" stroke="currentColor"/>
+    
+    <!-- Sitting posture -->
+    <path class="logo-accent" d="M 0 25 Q 10 30 20 35 Q 30 40 35 50" 
+          stroke-width="3" fill="none" stroke="currentColor"/>
+  </g>
+</svg>

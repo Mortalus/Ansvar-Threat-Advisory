@@ -1,0 +1,36 @@
+# Development Dockerfile for Next.js with proper CSS hot-reloading
+FROM node:18-alpine
+
+# Install dependencies for better file watching
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy configuration files first (for CSS processing)
+COPY postcss.config.js tailwind.config.js next.config.js ./
+COPY tsconfig.json ./
+
+# Create necessary directories
+RUN mkdir -p .next public
+
+# Set environment variables for development
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+
+# Expose the development port
+EXPOSE 3000
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
+
+# Start development server
+CMD ["npm", "run", "dev"]
